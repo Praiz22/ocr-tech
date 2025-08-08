@@ -39,7 +39,7 @@ def _keyword_category(text):
         return "Photograph"
     return None
 
-def smart_classify(img_bgr, processed_bin):
+def smart_classify(img_bgr, processed_bin, ml_model=None, ml_preprocess=None, ml_decode=None):
     h, w = processed_bin.shape[:2]
     gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
     ocr_text = _ocr_text_from_binary(processed_bin)
@@ -81,9 +81,34 @@ def smart_classify(img_bgr, processed_bin):
                 cat = "Other / Image"
 
     score = min(1.0, score)
+
+    # ML classifier (MobileNetV2)
+    ml_label, ml_conf = None, None
+    if ml_model is not None and ml_preprocess is not None and ml_decode is not None:
+        try:
+            from tensorflow.keras.preprocessing.image import img_to_array
+            img_resized = cv2.resize(img_bgr, (224,224))
+            arr = img_to_array(img_resized)
+            arr = np.expand_dims(arr, axis=0)
+            arr = ml_preprocess(arr)
+            preds = ml_model.predict(arr)
+            decoded = ml_decode(preds, top=1)[0][0]
+            ml_label = decoded[1]
+            ml_conf = float(decoded[2])
+        except Exception:
+            ml_label, ml_conf = None, None
+
+    # Decide final category (prefer ML if confidence > 0.80)
+    if ml_label and ml_conf is not None and ml_conf > 0.80:
+        final_cat = f"ImageNet: {ml_label.replace('_',' ').title()}"
+        final_conf = ml_conf
+    else:
+        final_cat = cat
+        final_conf = score
+
     return {
-        "category": cat,
-        "score": score,
+        "category": final_cat,
+        "score": final_conf,
         "text_ratio": tratio,
         "edge_density": edge_d,
         "color_variance": color_var,
@@ -91,8 +116,16 @@ def smart_classify(img_bgr, processed_bin):
         "width": w,
         "height": h,
         "text": ocr_text,
-        "aspect_ratio": aspect
+        "aspect_ratio": aspect,
+        "ml_label": ml_label,
+        "ml_conf": ml_conf,
+        "heuristic_category": cat,
+        "heuristic_score": score
     }
 
-def classify_text(img_bgr, processed_bin):
-    return smart_classify(img_bgr, processed_bin)
+def classify_text(img_bgr, processed_bin, ml_model=None, ml_preprocess=None, ml_decode=None):
+    """
+    Return the full classification dictionary (category, score, metrics).
+    Pass ml_model, ml_preprocess, ml_decode from your main app if you want ML.
+    """
+    return smart_classify(img_bgr, processed_bin, ml_model, ml_preprocess, ml_decode)

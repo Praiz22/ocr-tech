@@ -1,34 +1,14 @@
 import streamlit as st
 import cv2
 import pytesseract
-pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
 import numpy as np
 from PIL import Image
 from utils.preprocessing import preprocess_image
-from utils.classify import classify_text
+from utils.classify import classify_text, set_rf_model
 import base64
+import joblib  # For loading scikit-learn model
 
-# Add lightweight ML classifier
-from tensorflow.keras.applications import MobileNetV2
-from tensorflow.keras.applications.mobilenet_v2 import preprocess_input, decode_predictions
-from tensorflow.keras.preprocessing.image import img_to_array
-
-@st.cache_resource
-def load_mobilenet():
-    return MobileNetV2(weights="imagenet")
-
-mobilenet = load_mobilenet()
-
-def ml_classify(img_bgr):
-    img_resized = cv2.resize(img_bgr, (224,224))
-    arr = img_to_array(img_resized)
-    arr = np.expand_dims(arr, axis=0)
-    arr = preprocess_input(arr)
-    preds = mobilenet.predict(arr)
-    decoded = decode_predictions(preds, top=1)[0][0]  # (class, label, prob)
-    return decoded[1], float(decoded[2])
-
-# --- Minimal Clean CSS ---
+# --- Clean, Professional Minimal CSS ---
 st.markdown("""
 <style>
 body {
@@ -38,7 +18,7 @@ body {
 }
 .card {
     background: rgba(42,42,42,0.10);
-    box-shadow: 0 4px 32px 0 rgba(30,30,30,0.14);
+    box-shadow: 0 4px 32px 0 rgba(30,30,30,0.10);
     backdrop-filter: blur(6px);
     -webkit-backdrop-filter: blur(6px);
     border-radius: 16px;
@@ -124,6 +104,17 @@ def metric_bar(label, value, max_value=1.0):
     """
     st.markdown(bar, unsafe_allow_html=True)
 
+# --- Load ML Model (if available) ---
+# Example: place 'rf_model.joblib' and 'rf_labels.joblib' in your repo root if you want ML
+ml_model = None
+ml_label_map = None
+try:
+    ml_model = joblib.load("rf_model.joblib")
+    ml_label_map = joblib.load("rf_labels.joblib")
+    set_rf_model(ml_model, ml_label_map)
+except Exception:
+    pass
+
 # --- Upload & Processing ---
 col1, col2 = st.columns([1,1.2])
 with col1:
@@ -149,24 +140,12 @@ with col2:
             <a class="copy-btn" href="data:text/plain;base64,{b64_text}" download="extracted_text.txt">⬇ Download Text</a>
         """, unsafe_allow_html=True)
 
-        # ML classifier
-        ml_label, ml_conf = ml_classify(img_cv)
-
-        # Heuristic + OCR classifier
         result = classify_text(img_cv, processed_img)
 
-        # Final category: prefer ML if confidence very high, else combine
-        if ml_conf > 0.80:
-            final_cat = f"ImageNet: {ml_label.replace('_',' ').title()}"
-            final_conf = ml_conf
-        else:
-            final_cat = result['category']
-            final_conf = result['score']
-
         st.subheader("📌 Predicted Category")
-        st.success(f"{final_cat}  —  Confidence: {final_conf*100:.1f}%")
-
-        st.write(f"<span style='font-size:0.92rem;color:#222'><b>ML Top-1:</b> {ml_label} ({ml_conf*100:.1f}%)</span>", unsafe_allow_html=True)
+        st.success(f"{result['category']}  —  Confidence: {result['score']*100:.1f}%")
+        if result.get('ml_label'):
+            st.write(f"<span style='font-size:0.92rem;color:#222'><b>ML:</b> {result['ml_label']} ({result['ml_conf']*100:.1f}%)</span>", unsafe_allow_html=True)
 
         st.subheader("📊 Classification Metrics")
         metric_bar("Text Ratio", result['text_ratio'], 0.05)

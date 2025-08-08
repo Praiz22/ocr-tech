@@ -8,86 +8,97 @@ from utils.preprocessing import preprocess_image
 from utils.classify import classify_text
 import base64
 
-# --- Glassmorphism CSS ---
+# Add lightweight ML classifier
+from tensorflow.keras.applications import MobileNetV2
+from tensorflow.keras.applications.mobilenet_v2 import preprocess_input, decode_predictions
+from tensorflow.keras.preprocessing.image import img_to_array
+
+@st.cache_resource
+def load_mobilenet():
+    return MobileNetV2(weights="imagenet")
+
+mobilenet = load_mobilenet()
+
+def ml_classify(img_bgr):
+    img_resized = cv2.resize(img_bgr, (224,224))
+    arr = img_to_array(img_resized)
+    arr = np.expand_dims(arr, axis=0)
+    arr = preprocess_input(arr)
+    preds = mobilenet.predict(arr)
+    decoded = decode_predictions(preds, top=1)[0][0]  # (class, label, prob)
+    return decoded[1], float(decoded[2])
+
+# --- Minimal Clean CSS ---
 st.markdown("""
 <style>
 body {
-    background: linear-gradient(135deg, #ece9f6 0%, #f7fafd 100%);
+    background: #fff !important;
+    color: #111 !important;
     font-family: 'Inter', 'Segoe UI', sans-serif;
-    color: #181c2f;
 }
 .card {
-    background: rgba(255,255,255,0.35);
-    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border-radius: 20px;
-    border: 1px solid rgba(255,255,255,0.18);
-    padding: 2.3rem 1.7rem;
+    background: rgba(42,42,42,0.10);
+    box-shadow: 0 4px 32px 0 rgba(30,30,30,0.14);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    border-radius: 16px;
+    padding: 2rem 1.5rem;
     margin-bottom: 2rem;
-    transition: box-shadow .3s;
-}
-.card:hover {
-    box-shadow: 0 16px 40px 0 rgba(31, 38, 135, 0.22);
 }
 .hero {
     text-align: center;
-    padding: 2.5rem 1rem 1.2rem 1rem;
+    padding: 2.5rem 1rem 1rem 1rem;
 }
 .hero h1 {
-    font-weight: 900;
-    color: #223;
-    margin-bottom: 0.5rem;
-    letter-spacing: -0.03em;
+    font-family: 'Inter', sans-serif;
+    font-weight: 800;
+    color: #111;
+    margin-bottom: 0.4rem;
+    letter-spacing: -0.02em;
 }
 .hero p {
-    color: #456;
-    font-size: 1.15rem;
+    color: #444;
+    font-size: 1.08rem;
     margin-bottom: 0;
 }
 .stButton>button, .copy-btn {
-    background: linear-gradient(90deg, #6f86d6 0%, #48c6ef 100%);
-    color: white;
+    background: #222;
+    color: #fff;
     border: none;
-    padding: 0.65rem 1.6rem;
-    border-radius: 10px;
+    padding: 0.48rem 1.3rem;
+    border-radius: 8px;
     cursor: pointer;
     font-weight: 600;
-    font-size: 1.07rem;
-    margin-top: 0.6rem;
-    box-shadow: 0 1px 3px 0 rgba(31,38,135,.07);
-    transition: background .2s;
+    font-size: 1.05rem;
+    margin-top: 0.5rem;
+    box-shadow: 0 1px 3px 0 rgba(0,0,0,.09);
+    transition: background .18s;
 }
 .stButton>button:hover, .copy-btn:hover {
-    background: linear-gradient(90deg, #48c6ef 0%, #6f86d6 100%);
+    background: #444;
 }
 .footer {
     margin-top:2rem;
     padding:1.3rem;
     text-align:center;
-    background: rgba(255,255,255,0.36);
-    border-radius:18px;
+    background: rgba(42,42,42,0.11);
+    border-radius:14px;
     font-size:1rem;
-    color:#444;
-    box-shadow:0 3px 16px 0 rgba(31,38,135,.08)
+    color:#1b1b1b;
+    box-shadow:0 2px 10px 0 rgba(30,30,30,.10)
 }
 a.gh-link { display:inline-block; margin-top:10px; text-decoration:none; }
 a.gh-link img { width:26px; vertical-align:middle; }
 .metric-bar {
     margin-bottom: 0.6rem;
-    border-radius: 8px;
-    background: rgba(200,225,255,0.19);
-    box-shadow: 0 1px 5px rgba(31,38,135,0.09);
+    border-radius: 7px;
+    background: rgba(42,42,42,0.11);
 }
 .metric-fill {
-    border-radius: 8px;
-    height: 21px;
-    background: linear-gradient(90deg, #48e6d6, #6f86d6);
+    border-radius: 7px;
+    height: 17px;
+    background: #111;
     transition: width 1s;
-}
-@media (max-width: 900px) {
-    .card { padding: 1.2rem 0.7rem; }
-    .hero { padding: 1.2rem 0.3rem 1rem 0.3rem; }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -95,19 +106,18 @@ a.gh-link img { width:26px; vertical-align:middle; }
 # --- Hero Section ---
 st.markdown("""
 <div class="hero">
-    <img src="https://raw.githubusercontent.com/Praiz22/ocr-tech/main/ocr.gif" alt="OCR Animation">
-    <h1>🖼️ OCR-Based Image Classification System</h1>
-    <p>By Praix Tech & Jahsmine — Professional UI inspired by praixtech.netlify.app & erase.bg</p>
+    <h1>🖼️ OCR-Based Image Classification</h1>
+    <p>By Praix Tech & Jahsmine — Minimal, clean, professional UI</p>
 </div>
 """, unsafe_allow_html=True)
 
-# --- Metric Bar Glassmorphism ---
+# --- Metric Bar ---
 def metric_bar(label, value, max_value=1.0):
     pct = int(100 * min(value / max_value, 1.0))
     bar = f"""
     <div class="metric-bar">
-      <div style='font-size:1rem;margin-bottom:0.2rem'>{label}: <b>{value:.4f}</b></div>
-      <div style='background:rgba(220,220,255,0.33);border-radius:8px;overflow:hidden;height:21px;'>
+      <div style='font-size:1rem;margin-bottom:0.18rem;color:#111'>{label}: <b>{value:.4f}</b></div>
+      <div style='background:rgba(40,40,40,0.10);border-radius:7px;overflow:hidden;height:17px;'>
         <div class="metric-fill" style='width:{pct}%;'></div>
       </div>
     </div>
@@ -139,11 +149,24 @@ with col2:
             <a class="copy-btn" href="data:text/plain;base64,{b64_text}" download="extracted_text.txt">⬇ Download Text</a>
         """, unsafe_allow_html=True)
 
-        # Classification with metrics
+        # ML classifier
+        ml_label, ml_conf = ml_classify(img_cv)
+
+        # Heuristic + OCR classifier
         result = classify_text(img_cv, processed_img)
 
+        # Final category: prefer ML if confidence very high, else combine
+        if ml_conf > 0.80:
+            final_cat = f"ImageNet: {ml_label.replace('_',' ').title()}"
+            final_conf = ml_conf
+        else:
+            final_cat = result['category']
+            final_conf = result['score']
+
         st.subheader("📌 Predicted Category")
-        st.success(f"{result['category']}  —  Confidence: {result['score']*100:.1f}%")
+        st.success(f"{final_cat}  —  Confidence: {final_conf*100:.1f}%")
+
+        st.write(f"<span style='font-size:0.92rem;color:#222'><b>ML Top-1:</b> {ml_label} ({ml_conf*100:.1f}%)</span>", unsafe_allow_html=True)
 
         st.subheader("📊 Classification Metrics")
         metric_bar("Text Ratio", result['text_ratio'], 0.05)

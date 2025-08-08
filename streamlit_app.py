@@ -40,16 +40,6 @@ body {
     font-size: 1.1rem;
     color: #555;
 }
-.carousel {
-    display: flex;
-    overflow: hidden;
-    position: relative;
-    border-radius: 15px;
-}
-.carousel img {
-    width: 100%;
-    height: auto;
-}
 .card {
     background: white;
     padding: 2rem;
@@ -103,24 +93,35 @@ with col1:
 with col2:
     st.markdown('<div class="card">', unsafe_allow_html=True)
     if uploaded_file:
+        # Convert to OpenCV format
         img_cv = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
         processed_img = preprocess_image(img_cv)
         extracted_text = pytesseract.image_to_string(processed_img)
 
-        # --- Display OCR Output ---
+        # Display OCR Output
         st.subheader("📝 Extracted Text")
         st.text_area("", extracted_text, height=200)
 
-        # --- Copy to Clipboard ---
+        # Download & Copy options
         b64_text = base64.b64encode(extracted_text.encode()).decode()
         st.markdown(f"""
             <a class="copy-btn" href="data:text/plain;base64,{b64_text}" download="extracted_text.txt">⬇ Download Text</a>
         """, unsafe_allow_html=True)
 
-        # --- Classification ---
-        category = classify_text(img_cv, processed_img)
+        # Classification with metrics
+        result = classify_text(img_cv, processed_img)
+
         st.subheader("📌 Predicted Category")
-        st.success(category)
+        st.success(f"{result['category']}  —  Confidence: {result['score']*100:.1f}%")
+
+        st.subheader("📊 Classification Metrics")
+        st.write(f"- **Text Ratio:** `{result['text_ratio']:.4f}`")
+        st.write(f"- **Edge Density:** `{result['edge_density']:.4f}`")
+        st.write(f"- **Color Variance:** `{result['color_variance']:.4f}`")
+        st.write(f"- **Text Pixels Ratio:** `{result['text_pixels_ratio']:.4f}`")
+        st.write(f"- **Aspect Ratio:** `{result['aspect_ratio']:.2f}`")
+        st.write(f"- **Image Size:** `{result['width']} x {result['height']}`")
+
     else:
         st.info("Upload an image to see results.")
     st.markdown('</div>', unsafe_allow_html=True)

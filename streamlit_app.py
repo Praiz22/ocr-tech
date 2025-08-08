@@ -8,65 +8,87 @@ from utils.preprocessing import preprocess_image
 from utils.classify import classify_text
 import base64
 
-# --- Page Config ---
-st.set_page_config(
-    page_title="OCR-Based Image Classification",
-    page_icon="🖼️",
-    layout="wide"
-)
-
-# --- Custom CSS ---
+# --- Glassmorphism CSS ---
 st.markdown("""
 <style>
 body {
-    background: #f7fafd;
-    color: #222;
+    background: linear-gradient(135deg, #ece9f6 0%, #f7fafd 100%);
     font-family: 'Inter', 'Segoe UI', sans-serif;
+    color: #181c2f;
 }
 .card {
-    background: #fff;
-    padding: 2rem 1.5rem;
-    border-radius: 16px;
-    box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+    background: rgba(255,255,255,0.35);
+    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: 20px;
+    border: 1px solid rgba(255,255,255,0.18);
+    padding: 2.3rem 1.7rem;
     margin-bottom: 2rem;
+    transition: box-shadow .3s;
+}
+.card:hover {
+    box-shadow: 0 16px 40px 0 rgba(31, 38, 135, 0.22);
 }
 .hero {
     text-align: center;
-    padding: 2.5rem 1rem;
+    padding: 2.5rem 1rem 1.2rem 1rem;
 }
 .hero h1 {
     font-weight: 900;
     color: #223;
     margin-bottom: 0.5rem;
+    letter-spacing: -0.03em;
 }
 .hero p {
     color: #456;
-    font-size: 1.12rem;
+    font-size: 1.15rem;
+    margin-bottom: 0;
+}
+.stButton>button, .copy-btn {
+    background: linear-gradient(90deg, #6f86d6 0%, #48c6ef 100%);
+    color: white;
+    border: none;
+    padding: 0.65rem 1.6rem;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 1.07rem;
+    margin-top: 0.6rem;
+    box-shadow: 0 1px 3px 0 rgba(31,38,135,.07);
+    transition: background .2s;
+}
+.stButton>button:hover, .copy-btn:hover {
+    background: linear-gradient(90deg, #48c6ef 0%, #6f86d6 100%);
 }
 .footer {
     margin-top:2rem;
     padding:1.3rem;
     text-align:center;
-    background:#f1f3f6;
-    border-radius:10px;
-    font-size:0.98rem;
-    color:#666;
+    background: rgba(255,255,255,0.36);
+    border-radius:18px;
+    font-size:1rem;
+    color:#444;
+    box-shadow:0 3px 16px 0 rgba(31,38,135,.08)
 }
-a.gh-link { display:inline-block; margin-top:8px; text-decoration:none; }
-a.gh-link img { width:24px; vertical-align:middle; }
-.copy-btn {
-    background: #0078ff;
-    color: white;
-    border: none;
-    padding: 0.5rem 1rem;
+a.gh-link { display:inline-block; margin-top:10px; text-decoration:none; }
+a.gh-link img { width:26px; vertical-align:middle; }
+.metric-bar {
+    margin-bottom: 0.6rem;
     border-radius: 8px;
-    cursor: pointer;
-    text-decoration: none;
-    font-size: 1rem;
-    margin-top: 0.5rem;
-    display:inline-block;
+    background: rgba(200,225,255,0.19);
+    box-shadow: 0 1px 5px rgba(31,38,135,0.09);
 }
-.copy-btn:hover { background: #005fcc; }
+.metric-fill {
+    border-radius: 8px;
+    height: 21px;
+    background: linear-gradient(90deg, #48e6d6, #6f86d6);
+    transition: width 1s;
+}
+@media (max-width: 900px) {
+    .card { padding: 1.2rem 0.7rem; }
+    .hero { padding: 1.2rem 0.3rem 1rem 0.3rem; }
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -79,21 +101,21 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# --- Upload & Processing ---
-col1, col2 = st.columns(2)
-
-def metric_bar(label, value, max_value=1.0, color='#0078ff'):
-    pct = int(100 * min(value / max_value, 1.0) * 100)
+# --- Metric Bar Glassmorphism ---
+def metric_bar(label, value, max_value=1.0):
+    pct = int(100 * min(value / max_value, 1.0))
     bar = f"""
-    <div style='margin-bottom:0.5rem'>
+    <div class="metric-bar">
       <div style='font-size:1rem;margin-bottom:0.2rem'>{label}: <b>{value:.4f}</b></div>
-      <div style='background:#e0e5ec;border-radius:8px;overflow:hidden;height:18px;'>
-        <div style='width:{pct}%;background:{color};height:100%;transition:width 1s'></div>
+      <div style='background:rgba(220,220,255,0.33);border-radius:8px;overflow:hidden;height:21px;'>
+        <div class="metric-fill" style='width:{pct}%;'></div>
       </div>
     </div>
     """
     st.markdown(bar, unsafe_allow_html=True)
 
+# --- Upload & Processing ---
+col1, col2 = st.columns([1,1.2])
 with col1:
     st.markdown('<div class="card">', unsafe_allow_html=True)
     uploaded_file = st.file_uploader("📤 Upload an Image", type=["jpg", "png", "jpeg"])
@@ -124,13 +146,10 @@ with col2:
         st.success(f"{result['category']}  —  Confidence: {result['score']*100:.1f}%")
 
         st.subheader("📊 Classification Metrics")
-        metric_bar("Text Ratio", result['text_ratio'], 0.05, '#36c')
-        metric_bar("Edge Density", result['edge_density'], 0.05, '#2b8')
-        metric_bar("Color Variance", result['color_variance'], 1.0, '#c63')
-        metric_bar("Text Pixels Ratio", result['text_pixels_ratio'], 0.05, '#d39')
-        # If using DL confidence, display it
-        if 'dl_conf' in result:
-            metric_bar("DL Confidence", result['dl_conf'], 1.0, '#e80')
+        metric_bar("Text Ratio", result['text_ratio'], 0.05)
+        metric_bar("Edge Density", result['edge_density'], 0.05)
+        metric_bar("Color Variance", result['color_variance'], 1.0)
+        metric_bar("Text Pixels Ratio", result['text_pixels_ratio'], 0.05)
         st.write(f"- **Aspect Ratio:** `{result['aspect_ratio']:.2f}`")
         st.write(f"- **Image Size:** `{result['width']} x {result['height']}`")
     else:

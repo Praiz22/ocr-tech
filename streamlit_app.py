@@ -1,6 +1,9 @@
 import streamlit as st
 import cv2
 import pytesseract
+
+# Explicitly set the path (works on Streamlit Cloud after apt install)
+pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
 import numpy as np
 from PIL import Image
 from utils.preprocessing import preprocess_image

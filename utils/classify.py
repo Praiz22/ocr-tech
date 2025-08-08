@@ -4,7 +4,7 @@ import numpy as np
 import cv2
 
 def _ocr_text_from_binary(bin_img):
-    """Small helper — runs tesseract on a binary/preprocessed image and returns text."""
+    """Run Tesseract OCR on a binary/preprocessed image and return the text."""
     try:
         text = pytesseract.image_to_string(bin_img)
     except Exception:
@@ -27,13 +27,12 @@ def _text_pixel_ratio(bin_img):
     text_pixels = np.count_nonzero(bin_img == 0)
     return float(text_pixels) / (bin_img.shape[0] * bin_img.shape[1])
 
-def smart_classify(img_bgr, processed_bin, advanced=True):
+def smart_classify(img_bgr, processed_bin):
     """
-    img_bgr: original BGR image (cv2)
-    processed_bin: preprocessed binary image suitable for OCR (0/255 grayscale)
-    returns dict with category, score, and metrics
+    img_bgr: Original BGR image (cv2)
+    processed_bin: Preprocessed binary image suitable for OCR (0/255 grayscale)
+    Returns: Dictionary with category, score, and metrics.
     """
-    # metrics
     h, w = processed_bin.shape[:2]
     gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
     ocr_text = _ocr_text_from_binary(processed_bin)
@@ -69,7 +68,7 @@ def smart_classify(img_bgr, processed_bin, advanced=True):
     elif (color_var > 0.4 and tlen < 30 and edge_d < 0.015):
         cat = "Photograph"
     elif (tlen > 0 and tlen <= 20 and color_var < 0.3):
-        cat = "Scanned Note / Small text"
+        cat = "Scanned Note / Small Text"
     else:
         # fallback: check if many text-like pixels => document
         if text_pixel_r > 0.006:
@@ -77,7 +76,6 @@ def smart_classify(img_bgr, processed_bin, advanced=True):
         else:
             cat = "Other / Image"
 
-    # normalize confidence-ish score to 0-1
     score = min(1.0, score)
     return {
         "category": cat,
@@ -91,3 +89,10 @@ def smart_classify(img_bgr, processed_bin, advanced=True):
         "text": ocr_text,
         "aspect_ratio": aspect
     }
+
+def classify_text(img_bgr, processed_bin):
+    """
+    Wrapper for streamlit_app.py to just return the predicted category.
+    """
+    result = smart_classify(img_bgr, processed_bin)
+    return result["category"]

@@ -54,7 +54,7 @@ st.markdown("""
 st.markdown("""
     <div class="header-glass">
         <h1 style='color:white; font-weight:bold;'>🖼️ OCR-Based Image Classification System</h1>
-        <p style='color:white;'>By Praix Tech & Jahsmine — Inspired by removebg & erase.bg styles</p>
+        <p style='color:white;'>By Praix Tech & Jahsmine — Inspired by praixtech.netlify.app & erase.bg styles</p>
     </div>
 """, unsafe_allow_html=True)
 

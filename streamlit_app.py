@@ -6,18 +6,13 @@ from PIL import Image
 from utils.preprocessing import preprocess_image
 from utils.classify import classify_text
 
-# --------------------------
-# Page Config
-# --------------------------
 st.set_page_config(
     page_title="OCR-Based Image Classification",
     page_icon="🖼️",
     layout="wide"
 )
 
-# --------------------------
-# Custom CSS for Glassmorphism + Branding
-# --------------------------
+# Custom CSS for Glassmorphism
 st.markdown("""
     <style>
     body {
@@ -52,9 +47,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --------------------------
-# Glassmorphism Header
-# --------------------------
+# Header
 st.markdown("""
     <div class="header-glass">
         <h1 style='color:white; font-weight:bold;'>🖼️ OCR-Based Image Classification System</h1>
@@ -64,9 +57,7 @@ st.markdown("""
 
 st.write("")
 
-# --------------------------
-# Layout
-# --------------------------
+# Layout columns
 col1, col2 = st.columns(2)
 
 with col1:
@@ -93,9 +84,7 @@ with col2:
         st.info("Upload an image to see results.")
     st.markdown("</div>", unsafe_allow_html=True)
 
-# --------------------------
-# Footer with Credit & Disclaimer
-# --------------------------
+# Footer
 st.markdown("""
     <div class="footer">
         Developed by <b>Praix Tech</b> & <b>Jahsmine</b> for educational & research purposes 
@@ -104,4 +93,3 @@ st.markdown("""
         <b>Disclaimer:</b> This tool is intended solely for educational use.
     </div>
 """, unsafe_allow_html=True)
-

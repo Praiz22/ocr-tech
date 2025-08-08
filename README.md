@@ -1,3 +1,1 @@
-# OCR-Based Image Classification System
-
-This project uses Streamlit, OpenCV, and Tesseract OCR to classify images based on extracted text.
+# OCR-Based Image Classification System\n\nA Streamlit app using OCR and ML to classify images.

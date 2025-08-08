@@ -133,3 +133,22 @@ st.markdown("""
     <b>Disclaimer:</b> This tool is intended solely for educational use.
 </div>
 """, unsafe_allow_html=True)
+
+def metric_bar(label, value, max_value=1.0, color='#0078ff'):
+    pct = int(100 * value / max_value)
+    bar = f"""
+    <div style='margin-bottom:0.5rem'>
+      <div style='font-size:1rem;margin-bottom:0.2rem'>{label}: <b>{value:.4f}</b></div>
+      <div style='background:#e0e5ec;border-radius:8px;overflow:hidden;height:18px;'>
+        <div style='width:{pct}%;background:{color};height:100%;transition:width 1s'></div>
+      </div>
+    </div>
+    """
+    st.markdown(bar, unsafe_allow_html=True)
+
+# Usage:
+metric_bar("Text Ratio", result['text_ratio'], 0.05, '#36c')
+metric_bar("Edge Density", result['edge_density'], 0.05, '#2b8')
+metric_bar("Color Variance", result['color_variance'], 1.0, '#c63')
+metric_bar("Text Pixels Ratio", result['text_pixels_ratio'], 0.05, '#d39')
+metric_bar("DL Confidence", result.get('dl_conf', 0), 1.0, '#e80')

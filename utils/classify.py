@@ -46,16 +46,12 @@ def smart_classify(img_bgr, processed_bin):
 
     # Heuristic scoring
     score = 0.0
-    # strong text presence -> document
     if tlen > 100 or text_pixel_r > 0.008 or tratio > 0.0008:
         score += 0.6
-    # low color variance -> likely scanned doc / screenshot
     if color_var < 0.25:
         score += 0.15
-    # high edge density + lots of text => screenshot (UI elements)
     if edge_d > 0.015 and tlen > 20:
         score += 0.10
-    # very high color variance and low text -> photograph
     if color_var > 0.45 and tlen < 30:
         score += 0.05
 
@@ -70,7 +66,6 @@ def smart_classify(img_bgr, processed_bin):
     elif (tlen > 0 and tlen <= 20 and color_var < 0.3):
         cat = "Scanned Note / Small Text"
     else:
-        # fallback: check if many text-like pixels => document
         if text_pixel_r > 0.006:
             cat = "Text Document"
         else:
@@ -92,7 +87,7 @@ def smart_classify(img_bgr, processed_bin):
 
 def classify_text(img_bgr, processed_bin):
     """
-    Wrapper for streamlit_app.py to just return the predicted category.
+    Return the full classification dictionary (category, score, metrics).
+    This ensures streamlit_app.py can access category, score, and metrics.
     """
-    result = smart_classify(img_bgr, processed_bin)
-    return result["category"]
+    return smart_classify(img_bgr, processed_bin)

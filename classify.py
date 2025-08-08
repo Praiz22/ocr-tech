@@ -1,19 +1,22 @@
-# utils/classify.py
-
 import pytesseract
 import numpy as np
 import cv2
 
-# Try to import scikit-learn for ML classification
 try:
     from sklearn.ensemble import RandomForestClassifier
     SKLEARN_AVAILABLE = True
 except ImportError:
     SKLEARN_AVAILABLE = False
 
-# --- Feature extraction ---
+_rf_model = None
+_rf_label_map = None
+
+def set_rf_model(model, label_map):
+    global _rf_model, _rf_label_map
+    _rf_model = model
+    _rf_label_map = label_map
+
 def extract_features(img_bgr, processed_bin):
-    """Extracts numeric features for ML: color variance, edge density, text ratio, etc."""
     gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
     color_var = float(np.var(cv2.cvtColor(img_bgr, cv2.COLOR_BGR2LAB)) / 255.0)
     edge_d = float(np.count_nonzero(cv2.Canny(gray, 50, 150))) / (gray.shape[0] * gray.shape[1])
@@ -24,27 +27,7 @@ def extract_features(img_bgr, processed_bin):
     text_ratio = text_len / (processed_bin.shape[0] * processed_bin.shape[1] + 1e-6)
     return np.array([color_var, edge_d, text_pixels, aspect, text_ratio, text_len]), ocr_text
 
-# --- ML Classifier (RandomForest) ---
-_rf_model = None
-_rf_label_map = None
-
-def set_rf_model(model, label_map):
-    """Set the trained RandomForest model and label map for classification."""
-    global _rf_model, _rf_label_map
-    _rf_model = model
-    _rf_label_map = label_map
-
-def train_rf_classifier(X, y):
-    """Train and return a RandomForest on your features and labels."""
-    if not SKLEARN_AVAILABLE:
-        raise ImportError("scikit-learn is not installed.")
-    model = RandomForestClassifier(n_estimators=60, random_state=42)
-    model.fit(X, y)
-    labels = {i: label for i, label in enumerate(np.unique(y))}
-    return model, labels
-
 def rf_predict(features):
-    """Predict class and confidence using the trained RF model."""
     if _rf_model is None or _rf_label_map is None:
         return None, None
     pred = _rf_model.predict([features])[0]
@@ -52,7 +35,6 @@ def rf_predict(features):
     label = _rf_label_map.get(pred, str(pred))
     return label, proba
 
-# --- Heuristic Text Category ---
 def _keyword_category(text):
     text = text.lower()
     if "invoice" in text:
@@ -75,7 +57,6 @@ def smart_classify(img_bgr, processed_bin):
     features, ocr_text = extract_features(img_bgr, processed_bin)
     color_var, edge_d, text_pixels, aspect, text_ratio, text_len = features
 
-    # Heuristic scoring
     score = 0.0
     if text_len > 100 or text_pixels > 0.008 or text_ratio > 0.0008:
         score += 0.6
@@ -86,7 +67,6 @@ def smart_classify(img_bgr, processed_bin):
     if color_var > 0.45 and text_len < 30:
         score += 0.05
 
-    # Improved category logic: text-based keyword search first
     cat = _keyword_category(ocr_text)
     if not cat:
         if (text_len > 100 or text_pixels > 0.012):
@@ -104,10 +84,7 @@ def smart_classify(img_bgr, processed_bin):
                 cat = "Other / Image"
     score = min(1.0, score)
 
-    # Try ML classifier if available
     ml_label, ml_conf = rf_predict(features) if SKLEARN_AVAILABLE else (None, None)
-
-    # Prefer ML if confident, else heuristics
     if ml_label and ml_conf and ml_conf > 0.80:
         final_cat = f"ML: {ml_label}"
         final_conf = ml_conf

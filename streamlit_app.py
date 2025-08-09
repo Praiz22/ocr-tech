@@ -127,14 +127,14 @@ st.markdown("""
     transition: width 1.4s ease-in-out;
 }
 
-/* Category card styling */
-.category-box {
+/* Info box styling */
+.info-box {
     background: #e6f0ff;
+    color: var(--text-dark);
     border-left: 5px solid var(--accent);
     padding: 1rem 1.2rem;
     border-radius: 8px;
-    font-weight: 600;
-    color: var(--text-dark);
+    font-weight: 500;
     margin-top: 0.5rem;
 }
 
@@ -226,25 +226,19 @@ with col2:
                     <a class="copy-btn" href="data:text/plain;base64,{b64_text}" download="extracted_text.txt">⬇ Download Text</a>
                 """, unsafe_allow_html=True)
             else:
-                st.warning("No text detected in the image.")
+                st.markdown("<div class='info-box'>No text detected in the image.</div>", unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
             # Classification
             result = classify_text(img_cv, processed_img)
 
-            # Category card (improved style)
+            # Category card
             st.markdown('<div class="card">', unsafe_allow_html=True)
             st.subheader("📌 Predicted Category")
             if result.get('category'):
-                st.markdown(
-                    f"<div class='category-box'>{result['category']} — Confidence: {result['score']*100:.1f}%</div>",
-                    unsafe_allow_html=True
-                )
+                st.success(f"{result['category']}  —  Confidence: {result['score']*100:.1f}%")
                 if result.get('ml_label'):
-                    st.markdown(
-                        f"<span style='font-size:0.92rem;color:#222'><b>ML Model Prediction:</b> {result['ml_label']} ({result['ml_conf']*100:.1f}%)</span>",
-                        unsafe_allow_html=True
-                    )
+                    st.markdown(f"**ML Model Prediction:** {result['ml_label']} ({result['ml_conf']*100:.1f}%)")
             else:
                 st.warning("Could not classify the image.")
             st.markdown('</div>', unsafe_allow_html=True)
@@ -264,14 +258,12 @@ with col2:
             st.error(f"Error: {e}")
             st.info("Try another image.")
     else:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.info("Upload an image to begin analysis.")
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("<div class='info-box'>Upload an image to begin analysis.</div>", unsafe_allow_html=True)
 
 # --- Footer ---
 st.markdown("""
 <div class="footer">
-    Developed by <b>Praix Tech</b> & <b>Jahsmine</b> — Supervised by <b>Mrs. Oguniyi</b><br>
+    Developed by <b>Praix Tech</b>, <b>Jahsmine</b> & <b>John Olumide</b> — <b>2025</b> — Supervised by <b>Mrs. Oguniyi</b><br>
     <b>Disclaimer:</b> Educational use only.<br>
     <a class="gh-link" href="https://github.com/Praiz22/ocr-tech" target="_blank">
         <img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" alt="GitHub" /> View on GitHub

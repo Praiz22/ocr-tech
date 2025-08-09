@@ -18,6 +18,8 @@ st.markdown("""
     --text-muted: #555;
     --bg: #f8f9fb;
     --card-bg: #fff;
+    --info-bg: #e6f0ff;
+    --info-text: #084298;
 }
 
 /* Global background and font */
@@ -67,6 +69,17 @@ st.markdown("""
     color: var(--text-muted);
     font-size: 1.05rem;
     margin: 0;
+}
+
+/* Info box */
+.info-box {
+    background: var(--info-bg);
+    color: var(--info-text);
+    padding: 0.8rem 1rem;
+    border-radius: 8px;
+    font-weight: 500;
+    font-size: 0.96rem;
+    margin-top: 0.5rem;
 }
 
 /* Buttons */
@@ -125,17 +138,6 @@ st.markdown("""
     height: 100%;
     background: linear-gradient(90deg, #6dd5ed, #2193b0);
     transition: width 1.4s ease-in-out;
-}
-
-/* Info box styling */
-.info-box {
-    background: #e6f0ff;
-    color: var(--text-dark);
-    border-left: 5px solid var(--accent);
-    padding: 1rem 1.2rem;
-    border-radius: 8px;
-    font-weight: 500;
-    margin-top: 0.5rem;
 }
 
 /* Footer */
@@ -232,11 +234,14 @@ with col2:
             # Classification
             result = classify_text(img_cv, processed_img)
 
-            # Category card
+            # Category card (now using info-box)
             st.markdown('<div class="card">', unsafe_allow_html=True)
             st.subheader("📌 Predicted Category")
             if result.get('category'):
-                st.success(f"{result['category']}  —  Confidence: {result['score']*100:.1f}%")
+                st.markdown(
+                    f"<div class='info-box'><b>{result['category']}</b> — Confidence: {result['score']*100:.1f}%</div>",
+                    unsafe_allow_html=True
+                )
                 if result.get('ml_label'):
                     st.markdown(f"**ML Model Prediction:** {result['ml_label']} ({result['ml_conf']*100:.1f}%)")
             else:
@@ -258,12 +263,14 @@ with col2:
             st.error(f"Error: {e}")
             st.info("Try another image.")
     else:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
         st.markdown("<div class='info-box'>Upload an image to begin analysis.</div>", unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
 # --- Footer ---
 st.markdown("""
 <div class="footer">
-    Developed by <b>Praix Tech</b>, <b>Jahsmine</b> & <b>John Olumide</b> — <b>2025</b> — Supervised by <b>Mrs. Oguniyi</b><br>
+    Developed by <b>Praix Tech</b>, <b>Jahsmine</b> & <b>John Olumide</b> — 2025<br>
     <b>Disclaimer:</b> Educational use only.<br>
     <a class="gh-link" href="https://github.com/Praiz22/ocr-tech" target="_blank">
         <img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" alt="GitHub" /> View on GitHub

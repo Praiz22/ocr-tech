@@ -127,6 +127,17 @@ st.markdown("""
     transition: width 1.4s ease-in-out;
 }
 
+/* Category card styling */
+.category-box {
+    background: #e6f0ff;
+    border-left: 5px solid var(--accent);
+    padding: 1rem 1.2rem;
+    border-radius: 8px;
+    font-weight: 600;
+    color: var(--text-dark);
+    margin-top: 0.5rem;
+}
+
 /* Footer */
 .footer {
     margin-top: 2rem;
@@ -221,13 +232,19 @@ with col2:
             # Classification
             result = classify_text(img_cv, processed_img)
 
-            # Category card
+            # Category card (improved style)
             st.markdown('<div class="card">', unsafe_allow_html=True)
             st.subheader("📌 Predicted Category")
             if result.get('category'):
-                st.success(f"{result['category']}  —  Confidence: {result['score']*100:.1f}%")
+                st.markdown(
+                    f"<div class='category-box'>{result['category']} — Confidence: {result['score']*100:.1f}%</div>",
+                    unsafe_allow_html=True
+                )
                 if result.get('ml_label'):
-                    st.markdown(f"**ML Model Prediction:** {result['ml_label']} ({result['ml_conf']*100:.1f}%)")
+                    st.markdown(
+                        f"<span style='font-size:0.92rem;color:#222'><b>ML Model Prediction:</b> {result['ml_label']} ({result['ml_conf']*100:.1f}%)</span>",
+                        unsafe_allow_html=True
+                    )
             else:
                 st.warning("Could not classify the image.")
             st.markdown('</div>', unsafe_allow_html=True)

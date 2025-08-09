@@ -6,29 +6,25 @@ from PIL import Image
 from utils.preprocessing import preprocess_image
 from utils.classify import classify_text, set_rf_model
 import base64
-import joblib  # For loading scikit-learn model
+import joblib
 
-# --- Enhanced Custom CSS ---
+# --- Updated Custom CSS ---
 st.markdown("""
 <style>
-/* General body styles */
-body {
-    background: #f0f2f6 !important;
-    color: #111 !important;
-    font-family: 'Inter', 'Segoe UI', sans-serif;
-}
+/* General app background and font */
 .stApp {
-    background-color: #f0f2f6;
-}
-.main .block-container {
-    padding-top: 1rem;
-    padding-bottom: 1rem;
-}
-.css-1d37mhp, .st-emotion-cache-16383v {
-    background-color: #f0f2f6;
+    background-color: #f0f2f5;
+    color: #111;
+    font-family: 'Inter', sans-serif;
 }
 
-/* Card styling */
+/* Page container padding */
+.main .block-container {
+    padding-top: 1.5rem;
+    padding-bottom: 2rem;
+}
+
+/* Custom card styling with a subtle gradient and shadow */
 .card-container {
     display: flex;
     flex-direction: column;
@@ -39,14 +35,14 @@ body {
     border-radius: 16px;
     padding: 2rem;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-    transition: transform 0.2s, box-shadow 0.2s;
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
 }
 .card:hover {
     transform: translateY(-5px);
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
 }
 
-/* Hero section */
+/* Hero section for the header */
 .hero {
     text-align: center;
     padding: 2.5rem 1rem 1rem 1rem;
@@ -69,8 +65,25 @@ body {
     margin-bottom: 0;
 }
 
-/* Button styling */
-.stButton>button, .copy-btn {
+/* Button styling with gradient */
+.stButton>button {
+    background: linear-gradient(90deg, #007bff, #00c6ff);
+    color: #fff;
+    border: none;
+    padding: 0.6rem 1.5rem;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 1.05rem;
+    margin-top: 0.5rem;
+    transition: transform 0.2s, box-shadow 0.2s;
+    box-shadow: 0 4px 10px rgba(0, 123, 255, 0.3);
+}
+.stButton>button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(0, 123, 255, 0.4);
+}
+.copy-btn {
     background: #007bff;
     color: #fff;
     border: none;
@@ -82,12 +95,12 @@ body {
     margin-top: 0.5rem;
     transition: background 0.2s, transform 0.1s;
 }
-.stButton>button:hover, .copy-btn:hover {
+.copy-btn:hover {
     background: #0056b3;
     transform: translateY(-2px);
 }
 
-/* Metric bar styling with animation */
+/* Metric bar styling with animation and gradient */
 .metric-bar {
     margin-bottom: 1rem;
 }
@@ -137,8 +150,16 @@ a.gh-link img {
     vertical-align: middle;
     margin-right: 8px;
 }
+
+/* Custom text and headers */
+h2, h3, h4 {
+    color: #111;
+    font-family: 'Inter', sans-serif;
+    font-weight: 700;
+}
 </style>
 """, unsafe_allow_html=True)
+
 
 # --- Hero Section ---
 st.markdown("""
@@ -147,6 +168,7 @@ st.markdown("""
     <p>Using OCR and AI for smarter content analysis</p>
 </div>
 """, unsafe_allow_html=True)
+
 
 # --- Metric Bar with Animation Function ---
 def metric_bar(label, value, max_value=1.0):
@@ -161,6 +183,7 @@ def metric_bar(label, value, max_value=1.0):
     """
     st.markdown(bar, unsafe_allow_html=True)
 
+
 # --- Load ML Model (if available) ---
 ml_model = None
 ml_label_map = None
@@ -170,6 +193,7 @@ try:
     set_rf_model(ml_model, ml_label_map)
 except Exception:
     pass
+
 
 # --- Main App Columns ---
 col1, col2 = st.columns([1, 1.5])
@@ -214,7 +238,7 @@ with col2:
 
             result = classify_text(img_cv, processed_img)
 
-            st.markdown('<div class="card">', unsafe_allow_html=True)
+            st.markdown('</div><div class="card">', unsafe_allow_html=True)
             st.subheader("📌 Predicted Category")
             if result['category']:
                 st.success(f"{result['category']}  —  Confidence: {result['score']*100:.1f}%")
@@ -240,6 +264,7 @@ with col2:
     else:
         st.info("Upload an image to see results.")
     st.markdown('</div>', unsafe_allow_html=True)
+
 
 # --- Footer ---
 st.markdown("""

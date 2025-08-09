@@ -13,7 +13,7 @@ st.markdown("""
 <style>
 /* General app background and font */
 .stApp {
-    background-color: #f0f2f5;
+    background-color: #f7f7f7;
     color: #111;
     font-family: 'Inter', sans-serif;
 }
@@ -225,6 +225,7 @@ with col2:
             processed_img = preprocess_image(img_cv)
             extracted_text = pytesseract.image_to_string(processed_img)
 
+            st.markdown('<div class="card">', unsafe_allow_html=True)
             st.subheader("📝 Extracted Text")
             if extracted_text.strip():
                 st.text_area("", extracted_text, height=200)
@@ -235,10 +236,11 @@ with col2:
                 """, unsafe_allow_html=True)
             else:
                 st.warning("No text could be extracted from the image.")
+            st.markdown('</div>', unsafe_allow_html=True)
 
             result = classify_text(img_cv, processed_img)
 
-            st.markdown('</div><div class="card">', unsafe_allow_html=True)
+            st.markdown('<div class="card">', unsafe_allow_html=True)
             st.subheader("📌 Predicted Category")
             if result['category']:
                 st.success(f"{result['category']}  —  Confidence: {result['score']*100:.1f}%")
@@ -262,7 +264,10 @@ with col2:
             st.error(f"An unexpected error occurred during processing: {e}")
             st.info("Please try uploading a different image.")
     else:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
         st.info("Upload an image to see results.")
+        st.markdown('</div>', unsafe_allow_html=True)
+
     st.markdown('</div>', unsafe_allow_html=True)
 
 

@@ -38,6 +38,11 @@ def rf_predict(features):
 
 def _keyword_category(text):
     text = text.lower()
+
+    # New phone watermark detection
+    if re.search(r'shot on (itel|tecno|infinix|samsung|iphone|oppo|redmi|xiaomi|huawei)', text):
+        return "Photo Image"
+
     if re.search(r'\b(invoice|bill|receipt|statement)\b', text):
         return "Invoice/Receipt"
     if re.search(r'\b(form|application|document)\b', text):
@@ -56,7 +61,7 @@ def smart_classify(img_bgr, processed_bin):
     features, ocr_text = extract_features(img_bgr, processed_bin)
     color_var, edge_d, text_pixels, aspect, text_ratio, text_len = features
     
-    # Prioritize ML model if available and confident
+    # ML prediction priority
     ml_label, ml_conf = (None, None)
     if SKLEARN_AVAILABLE:
         ml_label, ml_conf = rf_predict(features)
@@ -78,24 +83,24 @@ def smart_classify(img_bgr, processed_bin):
                 "aspect_ratio": aspect,
             }
 
-    # Heuristic-based classification
+    # Heuristic rules
     cat = _keyword_category(ocr_text)
     score = 0.0
 
     if cat:
-        score = 0.8
-        if text_len > 100:
-            score = 0.95
+        score = 0.85 if text_len < 100 else 0.95
     else:
-        # Based on image features
         if text_len > 150 and text_pixels > 0.01:
             cat = "Text Document"
             score = 0.85
         elif text_len > 30 and edge_d > 0.02:
             cat = "Screenshot / UI"
             score = 0.75
-        elif color_var > 0.45 and text_len < 30 and edge_d < 0.01:
+        elif color_var > 0.4 and text_len < 30 and edge_d < 0.01:
             cat = "Photograph"
+            score = 0.92
+        elif text_len <= 15 and color_var > 0.35:
+            cat = "Photo Image"
             score = 0.9
         elif text_len > 0 and text_len <= 50 and color_var < 0.3:
             cat = "Scanned Note / Small Text"
@@ -103,10 +108,10 @@ def smart_classify(img_bgr, processed_bin):
         else:
             if text_pixels > 0.005:
                 cat = "Text Document"
-                score = 0.5
+                score = 0.55
             else:
                 cat = "Other / Image"
-                score = 0.3
+                score = 0.4
 
     return {
         "category": cat,

@@ -8,77 +8,134 @@ from utils.classify import classify_text, set_rf_model
 import base64
 import joblib  # For loading scikit-learn model
 
-# --- Clean, Professional Minimal CSS ---
+# --- Enhanced Custom CSS ---
 st.markdown("""
 <style>
+/* General body styles */
 body {
-    background: #fff !important;
+    background: #f0f2f6 !important;
     color: #111 !important;
     font-family: 'Inter', 'Segoe UI', sans-serif;
 }
-.card {
-    background: rgba(42,42,42,0.10);
-    box-shadow: 0 4px 32px 0 rgba(30,30,30,0.10);
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
-    border-radius: 16px;
-    padding: 2rem 1.5rem;
-    margin-bottom: 2rem;
+.stApp {
+    background-color: #f0f2f6;
 }
+.main .block-container {
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+}
+.css-1d37mhp, .st-emotion-cache-16383v {
+    background-color: #f0f2f6;
+}
+
+/* Card styling */
+.card-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+.card {
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 2rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+.card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+}
+
+/* Hero section */
 .hero {
     text-align: center;
     padding: 2.5rem 1rem 1rem 1rem;
+    background: #ffffff;
+    border-radius: 16px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    margin-bottom: 2rem;
 }
 .hero h1 {
     font-family: 'Inter', sans-serif;
-    font-weight: 800;
+    font-weight: 900;
     color: #111;
-    margin-bottom: 0.4rem;
-    letter-spacing: -0.02em;
+    margin-bottom: 0.5rem;
+    letter-spacing: -0.04em;
+    font-size: 2.5rem;
 }
 .hero p {
-    color: #444;
-    font-size: 1.08rem;
+    color: #555;
+    font-size: 1.1rem;
     margin-bottom: 0;
 }
+
+/* Button styling */
 .stButton>button, .copy-btn {
-    background: #222;
+    background: #007bff;
     color: #fff;
     border: none;
-    padding: 0.48rem 1.3rem;
+    padding: 0.6rem 1.5rem;
     border-radius: 8px;
     cursor: pointer;
     font-weight: 600;
     font-size: 1.05rem;
     margin-top: 0.5rem;
-    box-shadow: 0 1px 3px 0 rgba(0,0,0,.09);
-    transition: background .18s;
+    transition: background 0.2s, transform 0.1s;
 }
 .stButton>button:hover, .copy-btn:hover {
-    background: #444;
+    background: #0056b3;
+    transform: translateY(-2px);
 }
-.footer {
-    margin-top:2rem;
-    padding:1.3rem;
-    text-align:center;
-    background: rgba(42,42,42,0.11);
-    border-radius:14px;
-    font-size:1rem;
-    color:#1b1b1b;
-    box-shadow:0 2px 10px 0 rgba(30,30,30,.10)
-}
-a.gh-link { display:inline-block; margin-top:10px; text-decoration:none; }
-a.gh-link img { width:26px; vertical-align:middle; }
+
+/* Metric bar styling with animation */
 .metric-bar {
-    margin-bottom: 0.6rem;
+    margin-bottom: 1rem;
+}
+.metric-bar-label {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 0.25rem;
+}
+.metric-bar-value {
+    font-weight: normal;
+    color: #555;
+}
+.metric-fill-container {
+    height: 15px;
+    background: #e9ecef;
     border-radius: 7px;
-    background: rgba(42,42,42,0.11);
+    overflow: hidden;
 }
 .metric-fill {
-    border-radius: 7px;
-    height: 17px;
-    background: #111;
-    transition: width 1s;
+    height: 100%;
+    background: linear-gradient(90deg, #6dd5ed, #2193b0);
+    transition: width 1.5s ease-in-out;
+}
+
+/* Footer styling */
+.footer {
+    margin-top: 2rem;
+    padding: 1.5rem;
+    text-align: center;
+    background: #ffffff;
+    border-radius: 16px;
+    font-size: 0.9rem;
+    color: #555;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+.footer b {
+    color: #111;
+}
+a.gh-link {
+    display: inline-block;
+    margin-top: 10px;
+    text-decoration: none;
+}
+a.gh-link img {
+    width: 24px;
+    vertical-align: middle;
+    margin-right: 8px;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -86,18 +143,18 @@ a.gh-link img { width:26px; vertical-align:middle; }
 # --- Hero Section ---
 st.markdown("""
 <div class="hero">
-    <h1>🖼️ OCR-Based Image Classification</h1>
-    <p>By Praix Tech & Jahsmine — Minimal, clean, professional UI</p>
+    <h1>🖼️ Document & Image Classifier</h1>
+    <p>Using OCR and AI for smarter content analysis</p>
 </div>
 """, unsafe_allow_html=True)
 
-# --- Metric Bar ---
+# --- Metric Bar with Animation Function ---
 def metric_bar(label, value, max_value=1.0):
     pct = int(100 * min(value / max_value, 1.0))
     bar = f"""
     <div class="metric-bar">
-      <div style='font-size:1rem;margin-bottom:0.18rem;color:#111'>{label}: <b>{value:.4f}</b></div>
-      <div style='background:rgba(40,40,40,0.10);border-radius:7px;overflow:hidden;height:17px;'>
+      <div class="metric-bar-label">{label}: <span class="metric-bar-value">{value:.4f}</span></div>
+      <div class="metric-fill-container">
         <div class="metric-fill" style='width:{pct}%;'></div>
       </div>
     </div>
@@ -105,7 +162,6 @@ def metric_bar(label, value, max_value=1.0):
     st.markdown(bar, unsafe_allow_html=True)
 
 # --- Load ML Model (if available) ---
-# Example: place 'rf_model.joblib' and 'rf_labels.joblib' in your repo root if you want ML
 ml_model = None
 ml_label_map = None
 try:
@@ -115,45 +171,72 @@ try:
 except Exception:
     pass
 
-# --- Upload & Processing ---
-col1, col2 = st.columns([1,1.2])
+# --- Main App Columns ---
+col1, col2 = st.columns([1, 1.5])
+
 with col1:
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    uploaded_file = st.file_uploader("📤 Upload an Image", type=["jpg", "png", "jpeg"])
-    if uploaded_file:
-        image = Image.open(uploaded_file)
-        st.image(image, caption="Uploaded Image", use_container_width=True)
+    st.subheader("📤 Upload an Image")
+    uploaded_file = st.file_uploader("", type=["jpg", "png", "jpeg"])
     st.markdown('</div>', unsafe_allow_html=True)
 
-with col2:
-    st.markdown('<div class="card">', unsafe_allow_html=True)
     if uploaded_file:
-        img_cv = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
-        processed_img = preprocess_image(img_cv)
-        extracted_text = pytesseract.image_to_string(processed_img)
+        with st.spinner("Processing image..."):
+            try:
+                image = Image.open(uploaded_file)
+                st.markdown('<div class="card">', unsafe_allow_html=True)
+                st.image(image, caption="Uploaded Image", use_container_width=True)
+                st.markdown('</div>', unsafe_allow_html=True)
 
-        st.subheader("📝 Extracted Text")
-        st.text_area("", extracted_text, height=200)
+            except Exception as e:
+                st.error(f"Error loading image: {e}")
+                uploaded_file = None
 
-        b64_text = base64.b64encode(extracted_text.encode()).decode()
-        st.markdown(f"""
-            <a class="copy-btn" href="data:text/plain;base64,{b64_text}" download="extracted_text.txt">⬇ Download Text</a>
-        """, unsafe_allow_html=True)
 
-        result = classify_text(img_cv, processed_img)
+with col2:
+    st.markdown('<div class="card card-container">', unsafe_allow_html=True)
+    if uploaded_file:
+        try:
+            img_cv = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+            processed_img = preprocess_image(img_cv)
+            extracted_text = pytesseract.image_to_string(processed_img)
 
-        st.subheader("📌 Predicted Category")
-        st.success(f"{result['category']}  —  Confidence: {result['score']*100:.1f}%")
-        if result.get('ml_label'):
-            st.write(f"<span style='font-size:0.92rem;color:#222'><b>ML:</b> {result['ml_label']} ({result['ml_conf']*100:.1f}%)</span>", unsafe_allow_html=True)
+            st.subheader("📝 Extracted Text")
+            if extracted_text.strip():
+                st.text_area("", extracted_text, height=200)
 
-        st.subheader("📊 Classification Metrics")
-        metric_bar("Text Ratio", result['text_ratio'], 0.05)
-        metric_bar("Edge Density", result['edge_density'], 0.05)
-        metric_bar("Color Variance", result['color_variance'], 1.0)
-        metric_bar("Text Pixels Ratio", result['text_pixels_ratio'], 0.05)
-        st.write(f"- **Aspect Ratio:** `{result['aspect_ratio']:.2f}`")
-        st.write(f"- **Image Size:** `{result['width']} x {result['height']}`")
+                b64_text = base64.b64encode(extracted_text.encode()).decode()
+                st.markdown(f"""
+                    <a class="copy-btn" href="data:text/plain;base64,{b64_text}" download="extracted_text.txt">⬇ Download Text</a>
+                """, unsafe_allow_html=True)
+            else:
+                st.warning("No text could be extracted from the image.")
+
+            result = classify_text(img_cv, processed_img)
+
+            st.markdown('<div class="card">', unsafe_allow_html=True)
+            st.subheader("📌 Predicted Category")
+            if result['category']:
+                st.success(f"{result['category']}  —  Confidence: {result['score']*100:.1f}%")
+                if result.get('ml_label'):
+                    st.write(f"<span style='font-size:0.92rem;color:#222'><b>ML Model Prediction:</b> {result['ml_label']} ({result['ml_conf']*100:.1f}%)</span>", unsafe_allow_html=True)
+            else:
+                st.warning("Could not classify the image.")
+            st.markdown('</div>', unsafe_allow_html=True)
+
+            st.markdown('<div class="card">', unsafe_allow_html=True)
+            st.subheader("📊 Classification Metrics")
+            metric_bar("Text Ratio", result['text_ratio'], 0.05)
+            metric_bar("Edge Density", result['edge_density'], 0.05)
+            metric_bar("Color Variance", result['color_variance'], 1.0)
+            metric_bar("Text Pixels Ratio", result['text_pixels_ratio'], 0.05)
+            st.write(f"- **Aspect Ratio:** `{result['aspect_ratio']:.2f}`")
+            st.write(f"- **Image Size:** `{result['width']} x {result['height']}`")
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        except Exception as e:
+            st.error(f"An unexpected error occurred during processing: {e}")
+            st.info("Please try uploading a different image.")
     else:
         st.info("Upload an image to see results.")
     st.markdown('</div>', unsafe_allow_html=True)

@@ -18,8 +18,6 @@ st.markdown("""
     --text-muted: #555;
     --bg: #f8f9fb;
     --card-bg: #fff;
-    --info-bg: #e6f0ff;
-    --info-text: #084298;
 }
 
 /* Global background and font */
@@ -71,17 +69,6 @@ st.markdown("""
     margin: 0;
 }
 
-/* Info box */
-.info-box {
-    background: var(--info-bg);
-    color: var(--info-text);
-    padding: 0.8rem 1rem;
-    border-radius: 8px;
-    font-weight: 500;
-    font-size: 0.96rem;
-    margin-top: 0.5rem;
-}
-
 /* Buttons */
 .stButton>button {
     background: linear-gradient(90deg, var(--accent), var(--accent2));
@@ -113,6 +100,16 @@ st.markdown("""
 }
 .copy-btn:hover {
     background: #0056b3;
+}
+
+/* Info box */
+.info-box {
+    background-color: #e7f1ff;
+    color: var(--text-dark);
+    border: 1px solid #b6daff;
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    font-size: 0.95rem;
 }
 
 /* Metric bars */
@@ -234,18 +231,17 @@ with col2:
             # Classification
             result = classify_text(img_cv, processed_img)
 
-            # Category card (now using info-box)
+            # Category card (info box styling)
             st.markdown('<div class="card">', unsafe_allow_html=True)
             st.subheader("📌 Predicted Category")
             if result.get('category'):
-                st.markdown(
-                    f"<div class='info-box'><b>{result['category']}</b> — Confidence: {result['score']*100:.1f}%</div>",
-                    unsafe_allow_html=True
-                )
+                info_html = f"<div class='info-box'><b>{result['category']}</b> — Confidence: {result['score']*100:.1f}%"
                 if result.get('ml_label'):
-                    st.markdown(f"**ML Model Prediction:** {result['ml_label']} ({result['ml_conf']*100:.1f}%)")
+                    info_html += f"<br><small>ML Model Prediction: <b>{result['ml_label']}</b> ({result['ml_conf']*100:.1f}%)</small>"
+                info_html += "</div>"
+                st.markdown(info_html, unsafe_allow_html=True)
             else:
-                st.warning("Could not classify the image.")
+                st.markdown("<div class='info-box'>Could not classify the image.</div>", unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
             # Metrics card

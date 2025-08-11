@@ -160,18 +160,6 @@ h2, h3, h4 {
 div[data-testid="stFileUploader"] label p {
     color: #333;
 }
-
-/* --- FIX: Ensure readable text on success/warning messages --- */
-/* The background colors are set by Streamlit, so we just need to ensure the text is dark */
-.stSuccess > div {
-    background-color: #d4edda !important;
-    color: #155724 !important;
-}
-.stWarning > div {
-    background-color: #fff3cd !important;
-    color: #856404 !important;
-}
-
 </style>
 """, unsafe_allow_html=True)
 
@@ -216,66 +204,67 @@ with col1:
     st.markdown('</div>', unsafe_allow_html=True)
 
     if uploaded_file:
-        try:
-            # Open the uploaded image and convert it to a format OpenCV can use
-            image = Image.open(uploaded_file)
-            img_cv = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+        with st.spinner("Processing image..."):
+            try:
+                # Open the uploaded image and convert it to a format OpenCV can use
+                image = Image.open(uploaded_file)
+                img_cv = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
 
-            st.markdown('<div class="card">', unsafe_allow_html=True)
-            st.image(image, caption="Uploaded Image", use_container_width=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-        except Exception as e:
-            st.error(f"Error loading image: {e}")
-            uploaded_file = None
+                st.markdown('<div class="card">', unsafe_allow_html=True)
+                st.image(image, caption="Uploaded Image", use_container_width=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+            except Exception as e:
+                st.error(f"Error loading image: {e}")
+                uploaded_file = None
 
 with col2:
     if uploaded_file:
-        # A simple spinner is now used for the loading state, as requested
-        with st.spinner("Processing image and classifying..."):
-            try:
-                # Use ocr_ensemble to get text and the preprocessed image
-                result_ocr = ocr_ensemble(img_cv, psm_list=(3, 6, 11))
-                extracted_text = result_ocr['text']
-                processed_img_for_classify = result_ocr['processed_img']
+        try:
+            # We now use the ocr_ensemble function which combines preprocessing and OCR
+            result_ocr = ocr_ensemble(img_cv, psm_list=(3, 6, 11))
+            extracted_text = result_ocr['text']
+            processed_img_for_classify = result_ocr['processed_img']
 
-                # Use the extracted text and processed image for classification
-                result = classify_text(img_cv, processed_img_for_classify, extracted_text)
+            st.markdown('<div class="card">', unsafe_allow_html=True)
+            st.subheader("📝 Extracted Text")
+            if extracted_text.strip():
+                st.text_area("", extracted_text, height=200)
+                b64_text = base64.b64encode(extracted_text.encode()).decode()
+                st.markdown(f"""
+                    <a class="copy-btn" href="data:text/plain;base64,{b64_text}" download="extracted_text.txt">⬇ Download Text</a>
+                """, unsafe_allow_html=True)
+            else:
+                st.warning("No text could be extracted from the image.")
+            st.markdown('</div>', unsafe_allow_html=True)
 
-                st.markdown('<div class="card">', unsafe_allow_html=True)
-                st.subheader("📝 Extracted Text")
-                if extracted_text.strip():
-                    st.text_area("", extracted_text, height=200)
-                    b64_text = base64.b64encode(extracted_text.encode()).decode()
-                    st.markdown(f"""
-                        <a class="copy-btn" href="data:text/plain;base64,{b64_text}" download="extracted_text.txt">⬇ Download Text</a>
-                    """, unsafe_allow_html=True)
-                else:
-                    st.warning("No text could be extracted from the image.")
-                st.markdown('</div>', unsafe_allow_html=True)
+            # Use the new processed image and extracted text for classification
+            # NOTE: This call to classify_text will not yet use the new 'extracted_text' argument
+            # as classify.py has not been updated yet.
+            result = classify_text(img_cv, processed_img_for_classify)
 
-                st.markdown('<div class="card">', unsafe_allow_html=True)
-                st.subheader("📌 Predicted Category")
-                if result['category']:
-                    st.success(f"**{result['category']}** —  Confidence: {result['score']*100:.1f}%")
-                    if result.get('ml_label'):
-                        st.write(f"<span style='font-size:0.92rem;color:#222'><b>ML Model Prediction:</b> {result['ml_label']} ({result['ml_conf']*100:.1f}%)</span>", unsafe_allow_html=True)
-                else:
-                    st.warning("Could not classify the image.")
-                st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown('<div class="card">', unsafe_allow_html=True)
+            st.subheader("📌 Predicted Category")
+            if result['category']:
+                st.success(f"{result['category']}  —  Confidence: {result['score']*100:.1f}%")
+                if result.get('ml_label'):
+                    st.write(f"<span style='font-size:0.92rem;color:#222'><b>ML Model Prediction:</b> {result['ml_label']} ({result['ml_conf']*100:.1f}%)</span>", unsafe_allow_html=True)
+            else:
+                st.warning("Could not classify the image.")
+            st.markdown('</div>', unsafe_allow_html=True)
 
-                st.markdown('<div class="card">', unsafe_allow_html=True)
-                st.subheader("📊 Classification Metrics")
-                metric_bar("Text Ratio", result['text_ratio'], 0.05)
-                metric_bar("Edge Density", result['edge_density'], 0.05)
-                metric_bar("Color Variance", result['color_variance'], 1.0)
-                metric_bar("Text Pixels Ratio", result['text_pixels_ratio'], 0.05)
-                st.write(f"- **Aspect Ratio:** `{result['aspect_ratio']:.2f}`")
-                st.write(f"- **Image Size:** `{result['width']} x {result['height']}`")
-                st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown('<div class="card">', unsafe_allow_html=True)
+            st.subheader("📊 Classification Metrics")
+            metric_bar("Text Ratio", result['text_ratio'], 0.05)
+            metric_bar("Edge Density", result['edge_density'], 0.05)
+            metric_bar("Color Variance", result['color_variance'], 1.0)
+            metric_bar("Text Pixels Ratio", result['text_pixels_ratio'], 0.05)
+            st.write(f"- **Aspect Ratio:** `{result['aspect_ratio']:.2f}`")
+            st.write(f"- **Image Size:** `{result['width']} x {result['height']}`")
+            st.markdown('</div>', unsafe_allow_html=True)
 
-            except Exception as e:
-                st.error(f"An unexpected error occurred during processing: {e}")
-                st.info("Please try uploading a different image.")
+        except Exception as e:
+            st.error(f"An unexpected error occurred during processing: {e}")
+            st.info("Please try uploading a different image.")
     else:
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.info("Upload an image to see results.")
@@ -291,4 +280,3 @@ st.markdown("""
     </a>
 </div>
 """, unsafe_allow_html=True)
- 

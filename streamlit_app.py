@@ -211,9 +211,12 @@ with col1:
 with col2:
     if uploaded_file:
         try:
+            # Convert to OpenCV BGR
             img_cv = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+
+            # 1️⃣ Extracted text using preprocess_image
             processed_img = preprocess_image(img_cv)
-            extracted_text = pytesseract.image_to_string(processed_img)
+            extracted_text = pytesseract.image_to_string(processed_img, config='--oem 3 --psm 6')
 
             # Text extraction card
             st.markdown('<div class="card">', unsafe_allow_html=True)
@@ -228,10 +231,10 @@ with col2:
                 st.markdown("<div class='info-box'>No text detected in the image.</div>", unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
-            # Classification
-            result = classify_text(img_cv, processed_img)
+            # 2️⃣ Classification (pass ORIGINAL image, not processed)
+            result = classify_text(img_cv)
 
-            # Category card (info box styling)
+            # Category card
             st.markdown('<div class="card">', unsafe_allow_html=True)
             st.subheader("📌 Predicted Category")
             if result.get('category'):

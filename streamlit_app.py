@@ -2,13 +2,13 @@ import streamlit as st
 import cv2
 import numpy as np
 from PIL import Image
-import pytesseract
 import base64
 import joblib
 
 # Import custom modules
-from utils.preprocessing import preprocess_image
+# We will use ocr_utils.ocr_ensemble instead of a separate preprocessing step
 from utils.classify import classify_text, set_rf_model
+from utils.ocr_utils import ocr_ensemble # Import the new robust OCR function
 
 # --- Enhanced Custom CSS ---
 st.markdown("""
@@ -206,7 +206,10 @@ with col1:
     if uploaded_file:
         with st.spinner("Processing image..."):
             try:
+                # Open the uploaded image and convert it to a format OpenCV can use
                 image = Image.open(uploaded_file)
+                img_cv = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+
                 st.markdown('<div class="card">', unsafe_allow_html=True)
                 st.image(image, caption="Uploaded Image", use_container_width=True)
                 st.markdown('</div>', unsafe_allow_html=True)
@@ -217,9 +220,10 @@ with col1:
 with col2:
     if uploaded_file:
         try:
-            img_cv = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
-            processed_img = preprocess_image(img_cv)
-            extracted_text = pytesseract.image_to_string(processed_img)
+            # We now use the ocr_ensemble function which combines preprocessing and OCR
+            result_ocr = ocr_ensemble(img_cv, psm_list=(3, 6, 11))
+            extracted_text = result_ocr['text']
+            processed_img_for_classify = result_ocr['processed_img']
 
             st.markdown('<div class="card">', unsafe_allow_html=True)
             st.subheader("📝 Extracted Text")
@@ -233,7 +237,8 @@ with col2:
                 st.warning("No text could be extracted from the image.")
             st.markdown('</div>', unsafe_allow_html=True)
 
-            result = classify_text(img_cv, processed_img)
+            # Use the new processed image and extracted text for classification
+            result = classify_text(img_cv, processed_img_for_classify, extracted_text)
 
             st.markdown('<div class="card">', unsafe_allow_html=True)
             st.subheader("📌 Predicted Category")

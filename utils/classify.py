@@ -2,6 +2,7 @@ import pytesseract
 import numpy as np
 import cv2
 import re
+from utils.preprocessing import preprocess_image
 
 try:
     from sklearn.ensemble import RandomForestClassifier
@@ -17,18 +18,25 @@ def set_rf_model(model, label_map):
     _rf_model = model
     _rf_label_map = label_map
 
-def extract_features(img_bgr, processed_bin):
+def extract_features(img_bgr):
+    """Extract numerical features + OCR text from the image."""
+    processed_bin = preprocess_image(img_bgr)  # NEW: Improved preprocessing
     gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+
     color_var = float(np.var(cv2.cvtColor(img_bgr, cv2.COLOR_BGR2LAB)) / 255.0)
     edge_d = float(np.count_nonzero(cv2.Canny(gray, 50, 150))) / (gray.shape[0] * gray.shape[1])
     text_pixels = float(np.count_nonzero(processed_bin == 0)) / (processed_bin.shape[0] * processed_bin.shape[1])
     aspect = float(processed_bin.shape[1]) / (processed_bin.shape[0] + 1e-6)
-    ocr_text = pytesseract.image_to_string(processed_bin)
+
+    # OCR text
+    ocr_text = pytesseract.image_to_string(processed_bin, config='--oem 3 --psm 6')
     text_len = len(ocr_text.strip())
     text_ratio = text_len / (processed_bin.shape[0] * processed_bin.shape[1] + 1e-6)
+
     return np.array([color_var, edge_d, text_pixels, aspect, text_ratio, text_len]), ocr_text
 
 def rf_predict(features):
+    """Predict category with RandomForest if available."""
     if _rf_model is None or _rf_label_map is None:
         return None, None
     pred = _rf_model.predict([features])[0]
@@ -37,10 +45,11 @@ def rf_predict(features):
     return label, proba
 
 def _keyword_category(text):
+    """Assign category from keywords in text."""
     text = text.lower()
 
-    # New phone watermark detection
-    if re.search(r'shot on (itel|tecno|infinix|samsung|iphone|oppo|redmi|xiaomi|huawei)', text):
+    # Detect camera watermarks → Photo Image
+    if re.search(r'shot on|iphone|itel|infinix|oppo|tecno|huawei|redmi|miui', text):
         return "Photo Image"
 
     if re.search(r'\b(invoice|bill|receipt|statement)\b', text):
@@ -55,13 +64,15 @@ def _keyword_category(text):
         return "Handwritten Note"
     if re.search(r'\b(photo|picture|photograph)\b', text):
         return "Photograph"
+
     return None
 
-def smart_classify(img_bgr, processed_bin):
-    features, ocr_text = extract_features(img_bgr, processed_bin)
+def smart_classify(img_bgr):
+    """Main classification logic."""
+    features, ocr_text = extract_features(img_bgr)
     color_var, edge_d, text_pixels, aspect, text_ratio, text_len = features
-    
-    # ML prediction priority
+
+    # Try ML model first
     ml_label, ml_conf = (None, None)
     if SKLEARN_AVAILABLE:
         ml_label, ml_conf = rf_predict(features)
@@ -78,40 +89,34 @@ def smart_classify(img_bgr, processed_bin):
                 "edge_density": edge_d,
                 "color_variance": color_var,
                 "text_pixels_ratio": text_pixels,
-                "width": processed_bin.shape[1],
-                "height": processed_bin.shape[0],
+                "width": img_bgr.shape[1],
+                "height": img_bgr.shape[0],
                 "aspect_ratio": aspect,
             }
 
-    # Heuristic rules
+    # Heuristic classification
     cat = _keyword_category(ocr_text)
     score = 0.0
 
     if cat:
-        score = 0.85 if text_len < 100 else 0.95
+        score = 0.9 if text_len > 30 else 0.8
     else:
+        # Feature-based fallback
         if text_len > 150 and text_pixels > 0.01:
             cat = "Text Document"
             score = 0.85
         elif text_len > 30 and edge_d > 0.02:
-            cat = "Screenshot / UI"
+            cat = "Screenshot/UI"
             score = 0.75
-        elif color_var > 0.4 and text_len < 30 and edge_d < 0.01:
-            cat = "Photograph"
-            score = 0.92
-        elif text_len <= 15 and color_var > 0.35:
+        elif color_var > 0.45 and text_len < 30 and edge_d < 0.01:
             cat = "Photo Image"
             score = 0.9
         elif text_len > 0 and text_len <= 50 and color_var < 0.3:
             cat = "Scanned Note / Small Text"
             score = 0.7
         else:
-            if text_pixels > 0.005:
-                cat = "Text Document"
-                score = 0.55
-            else:
-                cat = "Other / Image"
-                score = 0.4
+            cat = "Other / Image"
+            score = 0.4
 
     return {
         "category": cat,
@@ -120,8 +125,8 @@ def smart_classify(img_bgr, processed_bin):
         "edge_density": edge_d,
         "color_variance": color_var,
         "text_pixels_ratio": text_pixels,
-        "width": processed_bin.shape[1],
-        "height": processed_bin.shape[0],
+        "width": img_bgr.shape[1],
+        "height": img_bgr.shape[0],
         "text": ocr_text,
         "aspect_ratio": aspect,
         "ml_label": ml_label,
@@ -130,5 +135,6 @@ def smart_classify(img_bgr, processed_bin):
         "heuristic_score": score
     }
 
-def classify_text(img_bgr, processed_bin):
-    return smart_classify(img_bgr, processed_bin)
+def classify_text(img_bgr, processed_bin=None):
+    """Wrapper for backward compatibility."""
+    return smart_classify(img_bgr)

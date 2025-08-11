@@ -161,40 +161,17 @@ div[data-testid="stFileUploader"] label p {
     color: #333;
 }
 
-/* FIX: Ensure readable text on success/warning messages */
-div[data-testid="stSuccess"] {
+/* --- FIX: Ensure readable text on success/warning messages --- */
+/* The background colors are set by Streamlit, so we just need to ensure the text is dark */
+.stSuccess > div {
+    background-color: #d4edda !important;
     color: #155724 !important;
 }
-div[data-testid="stSuccess"] p {
-    color: #155724 !important;
-}
-div[data-testid="stWarning"] {
-    color: #856404 !important;
-}
-div[data-testid="stWarning"] p {
+.stWarning > div {
+    background-color: #fff3cd !important;
     color: #856404 !important;
 }
 
-/* Preloader animation styles */
-.loader-container {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 200px;
-    margin-top: 2rem;
-}
-.loader {
-    width: 60px;
-    height: 60px;
-    border: 6px solid #f3f3f3;
-    border-top: 6px solid #007bff;
-    border-radius: 50%;
-    animation: spin 1.5s linear infinite;
-}
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
 </style>
 """, unsafe_allow_html=True)
 
@@ -253,13 +230,7 @@ with col1:
 
 with col2:
     if uploaded_file:
-        # Display the preloading animation while processing
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.subheader("⚙️ Processing...")
-        st.markdown('<div class="loader-container"><div class="loader"></div></div>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-
-        # Use a spinner to show Streamlit is busy and to control the UI
+        # A simple spinner is now used for the loading state, as requested
         with st.spinner("Processing image and classifying..."):
             try:
                 # Use ocr_ensemble to get text and the preprocessed image
@@ -268,11 +239,7 @@ with col2:
                 processed_img_for_classify = result_ocr['processed_img']
 
                 # Use the extracted text and processed image for classification
-                # FIX: Pass 'extracted_text' as an argument to the classify_text function
                 result = classify_text(img_cv, processed_img_for_classify, extracted_text)
-
-                # Clear the loader and show the results
-                st.empty() # Clear the previous loader card
 
                 st.markdown('<div class="card">', unsafe_allow_html=True)
                 st.subheader("📝 Extracted Text")
@@ -289,7 +256,7 @@ with col2:
                 st.markdown('<div class="card">', unsafe_allow_html=True)
                 st.subheader("📌 Predicted Category")
                 if result['category']:
-                    st.success(f"{result['category']}  —  Confidence: {result['score']*100:.1f}%")
+                    st.success(f"**{result['category']}** —  Confidence: {result['score']*100:.1f}%")
                     if result.get('ml_label'):
                         st.write(f"<span style='font-size:0.92rem;color:#222'><b>ML Model Prediction:</b> {result['ml_label']} ({result['ml_conf']*100:.1f}%)</span>", unsafe_allow_html=True)
                 else:
@@ -307,7 +274,6 @@ with col2:
                 st.markdown('</div>', unsafe_allow_html=True)
 
             except Exception as e:
-                st.empty()
                 st.error(f"An unexpected error occurred during processing: {e}")
                 st.info("Please try uploading a different image.")
     else:

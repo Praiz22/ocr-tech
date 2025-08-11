@@ -18,9 +18,17 @@ def set_rf_model(model, label_map):
     _rf_model = model
     _rf_label_map = label_map
 
-def extract_features(img_bgr, processed_bin):
+def extract_features(img_bgr, processed_bin, ocr_text):
     """
     Extracts a variety of features from the image for classification.
+
+    Args:
+        img_bgr (numpy.ndarray): The original BGR color image.
+        processed_bin (numpy.ndarray): The preprocessed binary image.
+        ocr_text (str): The text extracted by the OCR engine.
+
+    Returns:
+        dict: A dictionary of extracted features.
     """
     gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
     
@@ -31,82 +39,72 @@ def extract_features(img_bgr, processed_bin):
     aspect = float(processed_bin.shape[1]) / (processed_bin.shape[0] + 1e-6)
     
     # OCR features
-    ocr_text = pytesseract.image_to_string(processed_bin)
-    text_len = len(ocr_text.strip())
+    text_len = len(re.sub(r'[^a-zA-Z0-9]', '', ocr_text))
     text_ratio = text_len / (processed_bin.shape[0] * processed_bin.shape[1] + 1e-6)
     
-    return np.array([color_var, edge_d, text_pixels, aspect, text_ratio, text_len]), ocr_text
+    return {
+        "text_ratio": text_ratio,
+        "edge_density": edge_d,
+        "color_variance": color_var,
+        "text_pixels_ratio": text_pixels,
+        "aspect_ratio": aspect,
+        "text_length": text_len,
+        "width": processed_bin.shape[1],
+        "height": processed_bin.shape[0],
+        "text": ocr_text,
+    }
 
-def rf_predict(features):
+def classify_text(img_bgr, processed_bin, ocr_text):
     """
-    Makes a prediction using the trained RandomForestClassifier model.
-    """
-    if _rf_model is None or _rf_label_map is None:
-        return None, None
-    try:
-        pred = _rf_model.predict([features])[0]
-        proba = np.max(_rf_model.predict_proba([features]))
-        label = _rf_label_map.get(pred, str(pred))
-        return label, proba
-    except Exception:
-        return None, None
-
-def _keyword_category(text):
-    """
-    Classifies based on keywords in the extracted text.
-    """
-    text = text.lower()
-    if re.search(r'\b(invoice|bill|receipt|statement|purchase|due date|total|tax)\b', text):
-        return "Invoice/Receipt"
-    if re.search(r'\b(form|application|document|official|report|report|name|address)\b', text):
-        return "Form/Document"
-    if re.search(r'\b(exam|test|result|score|grade|student|subject)\b', text):
-        return "Exam/Result"
-    if re.search(r'\b(ui|screenshot|screen|app|website|browser)\b', text):
-        return "Screenshot/UI"
-    if re.search(r'\b(note|handwriting|memo|to do list)\b', text):
-        return "Handwritten Note"
-    if re.search(r'\b(photo|picture|photograph|image|camera)\b', text):
-        return "Photograph"
-    return None
-
-def smart_classify(img_bgr, processed_bin):
-    """
-    Main classification function combining heuristic and ML-based methods.
-    """
-    features, ocr_text = extract_features(img_bgr, processed_bin)
-    color_var, edge_d, text_pixels, aspect, text_ratio, text_len = features
+    Classifies an image based on extracted features and OCR text.
     
-    # Prioritize ML model if available and confident
-    ml_label, ml_conf = (None, None)
-    if SKLEARN_AVAILABLE:
-        ml_label, ml_conf = rf_predict(features)
-        if ml_label and ml_conf and ml_conf > 0.85:
-            return {
-                "category": f"ML: {ml_label}",
-                "score": ml_conf,
-                "text_ratio": text_ratio,
-                "edge_density": edge_d,
-                "color_variance": color_var,
-                "text_pixels_ratio": text_pixels,
-                "width": processed_bin.shape[1],
-                "height": processed_bin.shape[0],
-                "aspect_ratio": aspect,
-                "text": ocr_text,
-                "ml_label": ml_label,
-                "ml_conf": ml_conf,
-            }
+    This function now takes the extracted text as a parameter, avoiding redundant OCR.
+    
+    Args:
+        img_bgr (numpy.ndarray): The original BGR color image.
+        processed_bin (numpy.ndarray): The preprocessed binary image.
+        ocr_text (str): The text extracted by the OCR engine.
 
-    # Heuristic-based classification
-    heuristic_category = _keyword_category(ocr_text)
+    Returns:
+        dict: A dictionary containing the classification result and scores.
+    """
+    # Extract features using the new function
+    features = extract_features(img_bgr, processed_bin, ocr_text)
+    
+    text_len = features['text_length']
+    text_ratio = features['text_ratio']
+    edge_d = features['edge_density']
+    color_var = features['color_variance']
+    text_pixels = features['text_pixels_ratio']
+
+    # Initialize a placeholder for the result
+    heuristic_category = "Unknown"
     heuristic_score = 0.0
+    ml_label = None
+    ml_conf = 0.0
 
-    if heuristic_category:
-        heuristic_score = 0.8
-        if text_len > 150:
-            heuristic_score = 0.95
-    else:
-        # Based on image features
+    # --- ML-based Classification (if model is available) ---
+    if SKLEARN_AVAILABLE and _rf_model:
+        try:
+            # Reshape features for the model
+            input_features = np.array([[text_len, text_ratio, edge_d, color_var, text_pixels]])
+            
+            ml_pred_idx = _rf_model.predict(input_features)[0]
+            ml_proba = _rf_model.predict_proba(input_features)[0]
+
+            ml_label = _rf_label_map[ml_pred_idx]
+            ml_conf = ml_proba[ml_pred_idx]
+            
+            # Use ML result as the primary classification
+            heuristic_category = ml_label
+            heuristic_score = ml_conf
+        except Exception:
+            # Fallback to heuristics if ML model fails
+            pass
+    
+    # --- Heuristic-based Classification (as a fallback or primary if no ML model) ---
+    if not _rf_model or (ml_conf < 0.6 and not ocr_text.strip()):
+        # Based on image features and text presence
         if text_len > 200 and text_pixels > 0.01:
             heuristic_category = "Text Document"
             heuristic_score = 0.9
@@ -127,23 +125,22 @@ def smart_classify(img_bgr, processed_bin):
                 heuristic_category = "Other / Image"
                 heuristic_score = 0.4
 
-    return {
+    # Combine all results into a single dictionary
+    result = {
         "category": heuristic_category,
         "score": min(1.0, heuristic_score),
-        "text_ratio": text_ratio,
-        "edge_density": edge_d,
-        "color_variance": color_var,
-        "text_pixels_ratio": text_pixels,
-        "width": processed_bin.shape[1],
-        "height": processed_bin.shape[0],
-        "text": ocr_text,
-        "aspect_ratio": aspect,
-        "ml_label": ml_label,
-        "ml_conf": ml_conf,
+        "text_ratio": features['text_ratio'],
+        "edge_density": features['edge_density'],
+        "color_variance": features['color_variance'],
+        "text_pixels_ratio": features['text_pixels_ratio'],
+        "aspect_ratio": features['aspect_ratio'],
+        "width": features['width'],
+        "height": features['height'],
+        "text": features['text'],
     }
 
-def classify_text(img_bgr, processed_bin):
-    """
-    Wrapper function to call the main classification logic.
-    """
-    return smart_classify(img_bgr, processed_bin)
+    if ml_label:
+        result['ml_label'] = ml_label
+        result['ml_conf'] = ml_conf
+
+    return result

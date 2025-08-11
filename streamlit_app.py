@@ -220,13 +220,13 @@ with col2:
     if uploaded_file:
         with st.spinner("Processing image and classifying..."):
             try:
-                # Use ocr_ensemble to get text and the preprocessed image
+                # FIX: Correctly unpack the tuple returned by ocr_ensemble.
+                # The function returns a dictionary, so we can access its keys.
                 result_ocr = ocr_ensemble(img_cv, psm_list=(3, 6, 11))
                 extracted_text = result_ocr['text']
                 processed_img_for_classify = result_ocr['processed_img']
 
                 # Use the extracted text and processed image for classification
-                # FIX: Pass 'extracted_text' as the third argument to the classify_text function
                 result = classify_text(img_cv, processed_img_for_classify, extracted_text)
 
                 st.markdown('<div class="card">', unsafe_allow_html=True)

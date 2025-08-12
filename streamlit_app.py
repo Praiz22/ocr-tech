@@ -5,9 +5,9 @@ from PIL import Image
 import base64
 import joblib
 
-# Import custom modules. We will now use the corrected classify.py.
+# Import custom modules. We will use the original preprocessing and classification.
+from utils.preprocessing import preprocess_image
 from utils.classify import classify_text, set_rf_model
-from utils.ocr_utils import ocr_ensemble
 
 # --- Enhanced Custom CSS ---
 st.markdown("""
@@ -184,6 +184,8 @@ def metric_bar(label, value, max_value=1.0):
     st.markdown(bar, unsafe_allow_html=True)
 
 # --- Load ML Model (if available) ---
+# We're keeping this in, but it will only work if you have a model file.
+# The `set_rf_model` function in classify.py now correctly handles this.
 ml_model = None
 ml_label_map = None
 try:
@@ -220,14 +222,11 @@ with col2:
     if uploaded_file:
         with st.spinner("Processing image and classifying..."):
             try:
-                # Use ocr_ensemble to get text and the preprocessed image
-                # We'll use a simplified psm_list for better performance
-                result_ocr = ocr_ensemble(img_cv, psm_list=(3, 6))
-                extracted_text = result_ocr['text']
-                processed_img_for_classify = result_ocr['processed_img']
-
-                # Use the extracted text and processed image for classification
-                result = classify_text(img_cv, processed_img_for_classify, extracted_text)
+                # This is the key change: We use the simpler `preprocess_image`
+                # and let `classify_text` handle the OCR internally, as designed.
+                processed_img = preprocess_image(img_cv)
+                result = classify_text(img_cv, processed_img, "") # Pass an empty string for ocr_text, classify.py handles it
+                extracted_text = result['text']
 
                 st.markdown('<div class="card">', unsafe_allow_html=True)
                 st.subheader("📝 Extracted Text")

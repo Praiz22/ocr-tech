@@ -34,12 +34,14 @@ def extract_features(img_bgr, processed_bin, ocr_text):
     gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
     
     # Heuristic features
+    # Note: `color_var` is computed on the BGR image, not the processed binary one.
     color_var = float(np.var(cv2.cvtColor(img_bgr, cv2.COLOR_BGR2LAB)) / 255.0)
     edge_d = float(np.count_nonzero(cv2.Canny(gray, 50, 150))) / (height * width + 1e-6)
     text_pixels = float(np.count_nonzero(processed_bin == 0)) / (height * width + 1e-6)
     aspect_ratio = float(width) / (height + 1e-6)
     
     # OCR features
+    # We now use the provided ocr_text directly.
     text_len = len(re.findall(r'\b\w+\b', ocr_text))
     text_ratio = len(ocr_text.strip()) / (height * width + 1e-6)
 

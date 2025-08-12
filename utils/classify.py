@@ -21,126 +21,105 @@ def set_rf_model(model, label_map):
 def extract_features(img_bgr, processed_bin, ocr_text):
     """
     Extracts a variety of features from the image for classification.
-
+    
     Args:
-        img_bgr (numpy.ndarray): The original BGR color image.
-        processed_bin (numpy.ndarray): The preprocessed binary image.
-        ocr_text (str): The text extracted by the OCR engine.
-
+        img_bgr (np.array): The original BGR image.
+        processed_bin (np.array): The preprocessed binary image from OCR.
+        ocr_text (str): The text extracted from the image.
+        
     Returns:
-        dict: A dictionary of extracted features.
+        dict: A dictionary containing all the extracted features.
     """
+    height, width = processed_bin.shape[:2] # Ensure we handle grayscale and color
     gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
     
     # Heuristic features
     color_var = float(np.var(cv2.cvtColor(img_bgr, cv2.COLOR_BGR2LAB)) / 255.0)
-    edge_d = float(np.count_nonzero(cv2.Canny(gray, 50, 150))) / (gray.shape[0] * gray.shape[1])
-    text_pixels = float(np.count_nonzero(processed_bin == 0)) / (processed_bin.shape[0] * processed_bin.shape[1])
-    aspect = float(processed_bin.shape[1]) / (processed_bin.shape[0] + 1e-6)
+    edge_d = float(np.count_nonzero(cv2.Canny(gray, 50, 150))) / (height * width + 1e-6)
+    text_pixels = float(np.count_nonzero(processed_bin == 0)) / (height * width + 1e-6)
+    aspect_ratio = float(width) / (height + 1e-6)
     
     # OCR features
-    text_len = len(re.sub(r'[^a-zA-Z0-9]', '', ocr_text))
-    text_ratio = text_len / (processed_bin.shape[0] * processed_bin.shape[1] + 1e-6)
-    
+    text_len = len(re.findall(r'\b\w+\b', ocr_text))
+    text_ratio = len(ocr_text.strip()) / (height * width + 1e-6)
+
     return {
+        "text_len": text_len,
         "text_ratio": text_ratio,
         "edge_density": edge_d,
         "color_variance": color_var,
         "text_pixels_ratio": text_pixels,
-        "aspect_ratio": aspect,
-        "text_length": text_len,
-        "width": processed_bin.shape[1],
-        "height": processed_bin.shape[0],
-        "text": ocr_text,
+        "aspect_ratio": aspect_ratio,
+        "width": width,
+        "height": height,
+        "text": ocr_text
     }
 
 def classify_text(img_bgr, processed_bin, ocr_text):
     """
-    Classifies an image based on extracted features and OCR text.
-    
-    This function now takes the extracted text as a parameter, avoiding redundant OCR.
-    
+    Classifies an image based on extracted features using either a machine learning
+    model (if available) or a set of heuristic rules.
+
     Args:
-        img_bgr (numpy.ndarray): The original BGR color image.
-        processed_bin (numpy.ndarray): The preprocessed binary image.
-        ocr_text (str): The text extracted by the OCR engine.
+        img_bgr (np.array): The original BGR image.
+        processed_bin (np.array): The preprocessed binary image.
+        ocr_text (str): The text extracted from the image.
 
     Returns:
-        dict: A dictionary containing the classification result and scores.
+        dict: A dictionary with the classification result, including category,
+              confidence score, and all extracted features.
     """
-    # Extract features using the new function
     features = extract_features(img_bgr, processed_bin, ocr_text)
-    
-    text_len = features['text_length']
-    text_ratio = features['text_ratio']
-    edge_d = features['edge_density']
-    color_var = features['color_variance']
-    text_pixels = features['text_pixels_ratio']
 
-    # Initialize a placeholder for the result
-    heuristic_category = "Unknown"
-    heuristic_score = 0.0
-    ml_label = None
-    ml_conf = 0.0
-
-    # --- ML-based Classification (if model is available) ---
+    # Use the ML model if available
+    ml_label, ml_conf = None, None
     if SKLEARN_AVAILABLE and _rf_model:
+        # Prepare feature vector for the model
+        feature_vector = np.array([
+            features["text_ratio"],
+            features["edge_density"],
+            features["color_variance"],
+            features["text_pixels_ratio"],
+            features["aspect_ratio"]
+        ]).reshape(1, -1)
+        
         try:
-            # Reshape features for the model
-            input_features = np.array([[text_len, text_ratio, edge_d, color_var, text_pixels]])
-            
-            ml_pred_idx = _rf_model.predict(input_features)[0]
-            ml_proba = _rf_model.predict_proba(input_features)[0]
-
-            ml_label = _rf_label_map[ml_pred_idx]
-            ml_conf = ml_proba[ml_pred_idx]
-            
-            # Use ML result as the primary classification
-            heuristic_category = ml_label
-            heuristic_score = ml_conf
+            prediction = _rf_model.predict(feature_vector)[0]
+            ml_label = _rf_label_map[prediction]
+            ml_conf = np.max(_rf_model.predict_proba(feature_vector)[0])
         except Exception:
-            # Fallback to heuristics if ML model fails
-            pass
-    
-    # --- Heuristic-based Classification (as a fallback or primary if no ML model) ---
-    if not _rf_model or (ml_conf < 0.6 and not ocr_text.strip()):
-        # Based on image features and text presence
-        if text_len > 200 and text_pixels > 0.01:
-            heuristic_category = "Text Document"
-            heuristic_score = 0.9
-        elif text_len > 50 and edge_d > 0.02 and color_var < 0.4:
-            heuristic_category = "Screenshot / UI"
-            heuristic_score = 0.8
-        elif color_var > 0.45 and text_len < 30 and edge_d < 0.01:
-            heuristic_category = "Photograph"
-            heuristic_score = 0.95
-        elif text_len > 0 and text_len <= 80 and color_var < 0.35:
-            heuristic_category = "Scanned Note / Small Text"
-            heuristic_score = 0.75
-        else:
-            if text_pixels > 0.005:
-                heuristic_category = "Text Document"
-                heuristic_score = 0.6
-            else:
-                heuristic_category = "Other / Image"
-                heuristic_score = 0.4
+            pass  # Fallback to heuristic if ML model fails
 
-    # Combine all results into a single dictionary
-    result = {
-        "category": heuristic_category,
-        "score": min(1.0, heuristic_score),
-        "text_ratio": features['text_ratio'],
-        "edge_density": features['edge_density'],
-        "color_variance": features['color_variance'],
-        "text_pixels_ratio": features['text_pixels_ratio'],
-        "aspect_ratio": features['aspect_ratio'],
-        "width": features['width'],
-        "height": features['height'],
-        "text": features['text'],
+    # Heuristic classification
+    heuristic_category = "Other / Image"
+    heuristic_score = 0.5
+    
+    if features["text_len"] > 200 and features["text_pixels_ratio"] > 0.01:
+        heuristic_category = "Text Document"
+        heuristic_score = 0.9
+    elif features["text_len"] > 50 and features["edge_density"] > 0.02 and features["color_variance"] < 0.4:
+        heuristic_category = "Screenshot / UI"
+        heuristic_score = 0.8
+    elif features["color_variance"] > 0.45 and features["text_len"] < 30 and features["edge_density"] < 0.01:
+        heuristic_category = "Photograph"
+        heuristic_score = 0.95
+    elif features["text_len"] > 0 and features["text_len"] <= 80 and features["color_variance"] < 0.35:
+        heuristic_category = "Scanned Note / Small Text"
+        heuristic_score = 0.75
+    else:
+        if features["text_pixels_ratio"] > 0.005:
+            heuristic_category = "Text Document"
+            heuristic_score = 0.6
+        else:
+            heuristic_category = "Other / Image"
+            heuristic_score = 0.4
+    
+    final_result = {
+        "category": ml_label or heuristic_category,
+        "score": ml_conf or min(1.0, heuristic_score),
+        "ml_label": ml_label,
+        "ml_conf": ml_conf,
+        **features # Add all extracted features to the final result dictionary
     }
 
-    if ml_label:
-        result['ml_label'] = ml_label
-        result['ml_conf'] = ml_conf
-
-    return result
+    return final_result

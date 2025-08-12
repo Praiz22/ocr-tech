@@ -4,10 +4,9 @@ import numpy as np
 from PIL import Image
 import base64
 import joblib
-import re
 
-# Import custom modules
-# We are no longer importing classify_text to avoid the bug
+# Import custom modules. We will now use the corrected classify.py.
+from utils.classify import classify_text, set_rf_model
 from utils.ocr_utils import ocr_ensemble
 
 # --- Enhanced Custom CSS ---
@@ -190,8 +189,9 @@ ml_label_map = None
 try:
     ml_model = joblib.load("rf_model.joblib")
     ml_label_map = joblib.load("rf_labels.joblib")
+    set_rf_model(ml_model, ml_label_map)
 except Exception:
-    st.warning("ML model not found. Using heuristic classification.")
+    pass
 
 # --- Main App Columns ---
 col1, col2 = st.columns([1, 1.5])
@@ -221,61 +221,13 @@ with col2:
         with st.spinner("Processing image and classifying..."):
             try:
                 # Use ocr_ensemble to get text and the preprocessed image
-                result_ocr = ocr_ensemble(img_cv, psm_list=(3, 6, 11))
+                # We'll use a simplified psm_list for better performance
+                result_ocr = ocr_ensemble(img_cv, psm_list=(3, 6))
                 extracted_text = result_ocr['text']
                 processed_img_for_classify = result_ocr['processed_img']
 
-                # --- Inlined Classification Logic (to avoid bug in classify.py) ---
-                
-                # Extract features from the preprocessed image
-                height, width = processed_img_for_classify.shape
-                gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
-                
-                color_var = float(np.var(cv2.cvtColor(img_cv, cv2.COLOR_BGR2LAB)) / 255.0)
-                edge_d = float(np.count_nonzero(cv2.Canny(gray, 50, 150))) / (height * width)
-                text_pixels = float(np.count_nonzero(processed_img_for_classify == 0)) / (height * width)
-                aspect = float(width) / (height + 1e-6)
-                
-                text_len = len(re.findall(r'\b\w+\b', extracted_text))
-                text_ratio = len(extracted_text.strip()) / (height * width + 1e-6)
-
-                # Heuristic classification based on features
-                heuristic_category = "Other / Image"
-                heuristic_score = 0.5
-                if text_len > 200 and text_pixels > 0.01:
-                    heuristic_category = "Text Document"
-                    heuristic_score = 0.9
-                elif text_len > 50 and edge_d > 0.02 and color_var < 0.4:
-                    heuristic_category = "Screenshot / UI"
-                    heuristic_score = 0.8
-                elif color_var > 0.45 and text_len < 30 and edge_d < 0.01:
-                    heuristic_category = "Photograph"
-                    heuristic_score = 0.95
-                elif text_len > 0 and text_len <= 80 and color_var < 0.35:
-                    heuristic_category = "Scanned Note / Small Text"
-                    heuristic_score = 0.75
-                else:
-                    if text_pixels > 0.005:
-                        heuristic_category = "Text Document"
-                        heuristic_score = 0.6
-                    else:
-                        heuristic_category = "Other / Image"
-                        heuristic_score = 0.4
-
-                result = {
-                    "category": heuristic_category,
-                    "score": min(1.0, heuristic_score),
-                    "text_ratio": text_ratio,
-                    "edge_density": edge_d,
-                    "color_variance": color_var,
-                    "text_pixels_ratio": text_pixels,
-                    "aspect_ratio": aspect,
-                    "width": width,
-                    "height": height,
-                    "text": extracted_text,
-                }
-                
-                # --- End of inlined classification logic ---
+                # Use the extracted text and processed image for classification
+                result = classify_text(img_cv, processed_img_for_classify, extracted_text)
 
                 st.markdown('<div class="card">', unsafe_allow_html=True)
                 st.subheader("📝 Extracted Text")
@@ -293,7 +245,8 @@ with col2:
                 st.subheader("📌 Predicted Category")
                 if result['category']:
                     st.success(f"{result['category']}  —  Confidence: {result['score']*100:.1f}%")
-                    # ML model prediction logic removed as it was not being used correctly and causing issues.
+                    if result.get('ml_label'):
+                        st.write(f"<span style='font-size:0.92rem;color:#222'><b>ML Model Prediction:</b> {result['ml_label']} ({result['ml_conf']*100:.1f}%)</span>", unsafe_allow_html=True)
                 else:
                     st.warning("Could not classify the image.")
                 st.markdown('</div>', unsafe_allow_html=True)

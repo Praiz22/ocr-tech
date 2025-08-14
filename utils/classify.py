@@ -75,24 +75,30 @@ def _classify_with_ml(features_dict):
 
 def _classify_with_heuristics(features_dict):
     """
-    Uses a simple rule-based system to classify the document.
+    Uses a more detailed rule-based system to classify the document.
     """
     score = 0.0
     category = "Unknown"
     
-    # These are simplified rules. Adjust them based on your specific data.
-    if features_dict['text_pixels_ratio'] > 0.02 and features_dict['edge_density'] > 0.015:
-        category = "Invoice"
-        score = 0.8
-    elif features_dict['text_len'] > 50 and features_dict['color_variance'] < 500:
-        category = "Form"
-        score = 0.7
-    elif features_dict['text_len'] > 5:
+    # Check for images/screenshots first
+    # Screenshots and images often have a low text pixel ratio and high color variance
+    if features_dict['text_pixels_ratio'] < 0.005 and features_dict['color_variance'] > 500:
+        category = "Image/Screenshot"
+        score = 0.9
+
+    # Then check for forms or invoices
+    elif features_dict['text_pixels_ratio'] > 0.02 and features_dict['edge_density'] > 0.015:
+        if features_dict['text_len'] > 100:
+            category = "Invoice"
+            score = 0.85
+        else:
+            category = "Form"
+            score = 0.8
+
+    # General document as a fallback
+    elif features_dict['text_len'] > 20:
         category = "Document"
         score = 0.6
-    else:
-        category = "Image"
-        score = 0.5
         
     return category, score
 

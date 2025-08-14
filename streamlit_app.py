@@ -5,10 +5,10 @@ from PIL import Image
 import base64
 import joblib
 
-# Import custom modules. We will use the original preprocessing and classification.
+# Import custom modules
 from utils.preprocessing import preprocess_image
 from utils.classify import classify_text, set_rf_model
-from utils.ocr_utils import _deskew, _ocr_and_score
+from utils.ocr_utils import _deskew, ocr_ensemble
 
 # --- Enhanced Custom CSS ---
 st.markdown("""
@@ -185,13 +185,12 @@ def metric_bar(label, value, max_value=1.0):
     st.markdown(bar, unsafe_allow_html=True)
 
 # --- Load ML Model (if available) ---
-ml_model = None
-ml_label_map = None
 try:
     ml_model = joblib.load("rf_model.joblib")
     ml_label_map = joblib.load("rf_labels.joblib")
     set_rf_model(ml_model, ml_label_map)
 except Exception:
+    st.info("No ML model found. Classification will use heuristic rules only.")
     pass
 
 # --- Main App Columns ---
@@ -206,9 +205,10 @@ with col1:
     if uploaded_file:
         with st.spinner("Processing image..."):
             try:
+                # Open the uploaded image and convert it to a format OpenCV can use
                 image = Image.open(uploaded_file)
                 img_cv = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
-                
+
                 st.markdown('<div class="card">', unsafe_allow_html=True)
                 st.image(image, caption="Uploaded Image", use_container_width=True)
                 st.markdown('</div>', unsafe_allow_html=True)
@@ -218,19 +218,16 @@ with col1:
 
 with col2:
     if uploaded_file:
-        with st.spinner("Processing image and classifying..."):
+        with st.spinner("Performing OCR and classifying..."):
             try:
                 # Preprocess the image
                 processed_img = preprocess_image(img_cv)
 
-                # Deskew the processed image for better OCR
-                deskewed_img = _deskew(processed_img)
+                # Use the OCR ensemble for best results
+                extracted_text, processed_img_for_ocr, ocr_result_details = ocr_ensemble(img_cv)
 
-                # Perform OCR with improved config (PSM 6 for single block)
-                extracted_text, _, _, _ = _ocr_and_score(deskewed_img, psm=6)
-
-                # Now, call classify_text with the extracted features
-                result = classify_text(img_cv, processed_img, extracted_text)
+                # Classify using the extracted features and pre-processed image
+                result = classify_text(img_cv, processed_img_for_ocr, extracted_text)
                 
                 st.markdown('<div class="card">', unsafe_allow_html=True)
                 st.subheader("📝 Extracted Text")
@@ -262,6 +259,13 @@ with col2:
                 metric_bar("Text Pixels Ratio", result['text_pixels_ratio'], 0.05)
                 st.write(f"- **Aspect Ratio:** `{result['aspect_ratio']:.2f}`")
                 st.write(f"- **Image Size:** `{result['width']} x {result['height']}`")
+                st.markdown('</div>', unsafe_allow_html=True)
+
+                st.markdown('<div class="card">', unsafe_allow_html=True)
+                st.subheader("⚙️ Pre-processing & OCR Details")
+                st.write(f"**OCR PSM Mode:** `{ocr_result_details['psm']}`")
+                st.write(f"**OCR Variant:** `{ocr_result_details['variant']}`")
+                st.write(f"**Average OCR Confidence:** `{ocr_result_details['conf']:.2f}`")
                 st.markdown('</div>', unsafe_allow_html=True)
 
             except Exception as e:

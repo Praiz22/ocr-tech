@@ -8,7 +8,7 @@ import joblib
 # Import custom modules
 from utils.preprocessing import preprocess_image
 from utils.classify import classify_text, set_rf_model
-from utils.ocr_utils import _deskew, ocr_ensemble
+from utils.ocr_utils import ocr_ensemble
 
 # --- Enhanced Custom CSS ---
 st.markdown("""
@@ -220,9 +220,6 @@ with col2:
     if uploaded_file:
         with st.spinner("Performing OCR and classifying..."):
             try:
-                # Preprocess the image
-                processed_img = preprocess_image(img_cv)
-
                 # Use the OCR ensemble for best results
                 extracted_text, processed_img_for_ocr, ocr_result_details = ocr_ensemble(img_cv)
 
@@ -253,10 +250,9 @@ with col2:
 
                 st.markdown('<div class="card">', unsafe_allow_html=True)
                 st.subheader("📊 Classification Metrics")
-                metric_bar("Text Ratio", result['text_ratio'], 0.05)
+                metric_bar("Text Pixels Ratio", result['text_pixels_ratio'], 0.05)
                 metric_bar("Edge Density", result['edge_density'], 0.05)
                 metric_bar("Color Variance", result['color_variance'], 1.0)
-                metric_bar("Text Pixels Ratio", result['text_pixels_ratio'], 0.05)
                 st.write(f"- **Aspect Ratio:** `{result['aspect_ratio']:.2f}`")
                 st.write(f"- **Image Size:** `{result['width']} x {result['height']}`")
                 st.markdown('</div>', unsafe_allow_html=True)

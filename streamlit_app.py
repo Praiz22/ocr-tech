@@ -124,6 +124,36 @@ st.markdown("""
     transition: width 1.5s ease-in-out;
 }
 
+/* Custom Predicted Category Styling */
+.predicted-category-card {
+    background-color: #f0f0f0; /* Default neutral background */
+    color: #111;
+    border-radius: 16px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+.predicted-category-card.success {
+    background-color: #d4edda; /* Light green for success */
+    color: #155724; /* Dark green text */
+}
+.predicted-category-card.warning {
+    background-color: #fff3cd; /* Light yellow for warning */
+    color: #856404; /* Dark yellow text */
+}
+.predicted-category-card.info {
+    background-color: #d1ecf1; /* Light blue for info */
+    color: #0c5460; /* Dark blue text */
+}
+.predicted-category-card h3 {
+    color: inherit; /* Inherit color from card */
+    margin-top: 0;
+}
+.predicted-category-card p {
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin: 0;
+}
+
 /* Footer styling */
 .footer {
     margin-top: 2rem;
@@ -189,7 +219,7 @@ try:
     ml_model = joblib.load("rf_model.joblib")
     ml_label_map = joblib.load("rf_labels.joblib")
     set_rf_model(ml_model, ml_label_map)
-except Exception:
+except FileNotFoundError:
     st.info("No ML model found. Classification will use heuristic rules only.")
     pass
 
@@ -238,15 +268,30 @@ with col2:
                     st.warning("No text could be extracted from the image.")
                 st.markdown('</div>', unsafe_allow_html=True)
 
+                # --- Corrected Predicted Category Card UI ---
                 st.markdown('<div class="card">', unsafe_allow_html=True)
                 st.subheader("📌 Predicted Category")
                 if result['category']:
-                    st.success(f"{result['category']}  —  Confidence: {result['score']*100:.1f}%")
+                    category_class = ""
+                    if result['category'] == 'Invoice':
+                        category_class = "success"
+                    elif result['category'] == 'Form':
+                        category_class = "info"
+                    else:
+                        category_class = "warning"
+
+                    st.markdown(f"""
+                        <div class="predicted-category-card {category_class}">
+                            <h3>{result['category']}</h3>
+                            <p>Confidence: {result['score']*100:.1f}%</p>
+                        </div>
+                    """, unsafe_allow_html=True)
                     if result.get('ml_label'):
                         st.write(f"<span style='font-size:0.92rem;color:#222'><b>ML Model Prediction:</b> {result['ml_label']} ({result['ml_conf']*100:.1f}%)</span>", unsafe_allow_html=True)
                 else:
                     st.warning("Could not classify the image.")
                 st.markdown('</div>', unsafe_allow_html=True)
+                # --- End of fix ---
 
                 st.markdown('<div class="card">', unsafe_allow_html=True)
                 st.subheader("📊 Classification Metrics")

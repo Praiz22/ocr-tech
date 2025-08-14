@@ -8,6 +8,7 @@ import joblib
 # Import custom modules. We will use the original preprocessing and classification.
 from utils.preprocessing import preprocess_image
 from utils.classify import classify_text, set_rf_model
+from utils.ocr_utils import _deskew, _ocr_and_score
 
 # --- Enhanced Custom CSS ---
 st.markdown("""
@@ -184,8 +185,6 @@ def metric_bar(label, value, max_value=1.0):
     st.markdown(bar, unsafe_allow_html=True)
 
 # --- Load ML Model (if available) ---
-# We're keeping this in, but it will only work if you have a model file.
-# The `set_rf_model` function in classify.py now correctly handles this.
 ml_model = None
 ml_label_map = None
 try:
@@ -207,10 +206,9 @@ with col1:
     if uploaded_file:
         with st.spinner("Processing image..."):
             try:
-                # Open the uploaded image and convert it to a format OpenCV can use
                 image = Image.open(uploaded_file)
                 img_cv = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
-
+                
                 st.markdown('<div class="card">', unsafe_allow_html=True)
                 st.image(image, caption="Uploaded Image", use_container_width=True)
                 st.markdown('</div>', unsafe_allow_html=True)
@@ -222,12 +220,18 @@ with col2:
     if uploaded_file:
         with st.spinner("Processing image and classifying..."):
             try:
-                # This is the key change: We use the simpler `preprocess_image`
-                # and let `classify_text` handle the OCR internally, as designed.
+                # Preprocess the image
                 processed_img = preprocess_image(img_cv)
-                result = classify_text(img_cv, processed_img, "") # Pass an empty string for ocr_text, classify.py handles it
-                extracted_text = result['text']
 
+                # Deskew the processed image for better OCR
+                deskewed_img = _deskew(processed_img)
+
+                # Perform OCR with improved config (PSM 6 for single block)
+                extracted_text, _, _, _ = _ocr_and_score(deskewed_img, psm=6)
+
+                # Now, call classify_text with the extracted features
+                result = classify_text(img_cv, processed_img, extracted_text)
+                
                 st.markdown('<div class="card">', unsafe_allow_html=True)
                 st.subheader("📝 Extracted Text")
                 if extracted_text.strip():

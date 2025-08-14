@@ -1,11 +1,8 @@
 import cv2
 import numpy as np
 import joblib
-import pytesseract
-from .ocr_utils import _ocr_and_score
-from .preprocessing import preprocess_image
 
-# Global variables for the ML model
+# Global variables for the ML model and its labels
 rf_model = None
 rf_label_map = None
 REVERSE_ML_LABEL_MAP = {}
@@ -27,6 +24,7 @@ def _get_classification_features(img_cv, processed_img, ocr_text):
     
     # Text-based features
     text_len = len(ocr_text.split())
+    # This is a better way to calculate text_pixels_ratio as it uses the pre-processed binary image
     text_pixels_ratio = np.sum(processed_img > 0) / (h * w) if (h * w) > 0 else 0
     
     # Image-based features
@@ -82,8 +80,7 @@ def _classify_with_heuristics(features_dict):
     score = 0.0
     category = "Unknown"
     
-    # Heuristic rules based on features
-    # These are simplified rules. You should adjust them based on your data.
+    # These are simplified rules. Adjust them based on your specific data.
     if features_dict['text_pixels_ratio'] > 0.02 and features_dict['edge_density'] > 0.015:
         category = "Invoice"
         score = 0.8

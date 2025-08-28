@@ -1,329 +1,45 @@
 import streamlit as st
-import cv2
-import numpy as np
-from PIL import Image
-import base64
-import joblib
+from utils.preprocessing import display_preprocessing_section
+from utils.ocr import display_ocr_section
+from utils.train import display_training_section
+from utils.prediction import display_prediction_section
 
-# Import custom modules
-from utils.preprocessing import preprocess_image
-from utils.classify import classify_text, set_rf_model
-from utils.ocr_utils import ocr_ensemble
+st.set_page_config(page_title="Futuristic OCR Dashboard", layout="wide")
+with open("utils/style.css") as f:
+    st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
-# --- Enhanced Custom CSS ---
-st.markdown("""
-<style>
-/* General app background and font */
-.stApp {
-    background-color: #f7f7f7;
-    color: #111;
-    font-family: 'Inter', sans-serif;
-}
-
-/* Main content container padding */
-.main .block-container {
-    padding-top: 1.5rem;
-    padding-bottom: 2rem;
-}
-
-/* Custom card styling with a subtle shadow and hover effect */
-.card {
-    background: #ffffff;
-    border-radius: 16px;
-    padding: 2rem;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-    margin-bottom: 1.5rem;
-}
-.card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
-}
-
-/* Hero section for the header */
-.hero {
-    text-align: center;
-    padding: 2.5rem 1rem 1rem 1rem;
-    background: #ffffff;
-    border-radius: 16px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-    margin-bottom: 2rem;
-}
-.hero h1 {
-    font-family: 'Inter', sans-serif;
-    font-weight: 900;
-    color: #111;
-    margin-bottom: 0.5rem;
-    letter-spacing: -0.04em;
-    font-size: 2.5rem;
-}
-.hero p {
-    color: #555;
-    font-size: 1.1rem;
-    margin-bottom: 0;
-}
-
-/* Button styling with a professional gradient */
-.stButton>button {
-    background: linear-gradient(90deg, #007bff, #00c6ff);
-    color: #fff;
-    border: none;
-    padding: 0.6rem 1.5rem;
-    border-radius: 8px;
-    cursor: pointer;
-    font-weight: 600;
-    font-size: 1.05rem;
-    margin-top: 0.5rem;
-    transition: transform 0.2s, box-shadow 0.2s;
-    box-shadow: 0 4px 10px rgba(0, 123, 255, 0.3);
-}
-.stButton>button:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 15px rgba(0, 123, 255, 0.4);
-}
-.copy-btn {
-    background: #007bff;
-    color: #fff;
-    border: none;
-    padding: 0.6rem 1.5rem;
-    border-radius: 8px;
-    cursor: pointer;
-    font-weight: 600;
-    font-size: 1.05rem;
-    margin-top: 0.5rem;
-    transition: background 0.2s, transform 0.1s;
-}
-.copy-btn:hover {
-    background: #0056b3;
-    transform: translateY(-2px);
-}
-
-/* Metric bar styling with animation and gradient */
-.metric-bar {
-    margin-bottom: 1rem;
-}
-.metric-bar-label {
-    font-size: 1rem;
-    font-weight: 600;
-    color: #333;
-    margin-bottom: 0.25rem;
-}
-.metric-bar-value {
-    font-weight: normal;
-    color: #555;
-}
-.metric-fill-container {
-    height: 15px;
-    background: #e9ecef;
-    border-radius: 7px;
-    overflow: hidden;
-}
-.metric-fill {
-    height: 100%;
-    background: linear-gradient(90deg, #6dd5ed, #2193b0);
-    transition: width 1.5s ease-in-out;
-}
-
-/* Custom Predicted Category Styling */
-.predicted-category-card {
-    background-color: #f0f0f0; /* Default neutral background */
-    color: #111;
-    border-radius: 16px;
-    padding: 1.5rem;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-}
-.predicted-category-card.success {
-    background-color: #d4edda; /* Light green for success */
-    color: #155724; /* Dark green text */
-}
-.predicted-category-card.warning {
-    background-color: #fff3cd; /* Light yellow for warning */
-    color: #856404; /* Dark yellow text */
-}
-.predicted-category-card.info {
-    background-color: #d1ecf1; /* Light blue for info */
-    color: #0c5460; /* Dark blue text */
-}
-.predicted-category-card h3 {
-    color: inherit; /* Inherit color from card */
-    margin-top: 0;
-}
-.predicted-category-card p {
-    font-size: 1.2rem;
-    font-weight: 600;
-    margin: 0;
-}
-
-/* Footer styling */
-.footer {
-    margin-top: 2rem;
-    padding: 1.5rem;
-    text-align: center;
-    background: #ffffff;
-    border-radius: 16px;
-    font-size: 0.9rem;
-    color: #555;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-}
-.footer b {
-    color: #111;
-}
-a.gh-link {
-    display: inline-block;
-    margin-top: 10px;
-    text-decoration: none;
-}
-a.gh-link img {
-    width: 24px;
-    vertical-align: middle;
-    margin-right: 8px;
-}
-
-/* Custom text and headers */
-h2, h3, h4 {
-    color: #111;
-    font-family: 'Inter', sans-serif;
-    font-weight: 700;
-}
-
-/* Fixing Streamlit's file uploader label color */
-div[data-testid="stFileUploader"] label p {
-    color: #333;
-}
-</style>
-""", unsafe_allow_html=True)
-
-# --- Hero Section ---
-st.markdown("""
-<div class="hero">
-    <h1>🖼️ Document & Image Classifier</h1>
-    <p>Using OCR and AI for smarter content analysis</p>
-</div>
-""", unsafe_allow_html=True)
-
-# --- Metric Bar with Animation Function ---
-def metric_bar(label, value, max_value=1.0):
-    pct = int(100 * min(value / max_value, 1.0))
-    bar = f"""
-    <div class="metric-bar">
-      <div class="metric-bar-label">{label}: <span class="metric-bar-value">{value:.4f}</span></div>
-      <div class="metric-fill-container">
-        <div class="metric-fill" style='width:{pct}%;'></div>
-      </div>
-    </div>
+# Header
+st.markdown(
     """
-    st.markdown(bar, unsafe_allow_html=True)
+    <div class="glass-header">
+      <h1>🔮 Futuristic OCR Dashboard</h1>
+      <h4>AI-powered OCR & ML with Next-Gen UI</h4>
+    </div>
+    """, unsafe_allow_html=True
+)
 
-# --- Load ML Model (if available) ---
-try:
-    ml_model = joblib.load("rf_model.joblib")
-    ml_label_map = joblib.load("rf_labels.joblib")
-    set_rf_model(ml_model, ml_label_map)
-except FileNotFoundError:
-    st.info("No ML model found. Classification will use heuristic rules only.")
-    pass
+# Main Layout
+tab1, tab2, tab3, tab4 = st.tabs([
+    "Upload & Preprocess", "OCR Extraction", "Model Training", "Prediction"
+])
 
-# --- Main App Columns ---
-col1, col2 = st.columns([1, 1.5])
+# Upload & Preprocess Tab
+with tab1:
+    display_preprocessing_section()
 
-with col1:
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.subheader("📤 Upload an Image")
-    uploaded_file = st.file_uploader("", type=["jpg", "png", "jpeg"])
-    st.markdown('</div>', unsafe_allow_html=True)
+# OCR Extraction Tab
+with tab2:
+    display_ocr_section()
 
-    if uploaded_file:
-        with st.spinner("Processing image..."):
-            try:
-                # Open the uploaded image and convert it to a format OpenCV can use
-                image = Image.open(uploaded_file)
-                img_cv = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+# Model Training Tab
+with tab3:
+    display_training_section()
 
-                st.markdown('<div class="card">', unsafe_allow_html=True)
-                st.image(image, caption="Uploaded Image", use_container_width=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-            except Exception as e:
-                st.error(f"Error loading image: {e}")
-                uploaded_file = None
+# Prediction Tab
+with tab4:
+    display_prediction_section()
 
-with col2:
-    if uploaded_file:
-        with st.spinner("Performing OCR and classifying..."):
-            try:
-                # Use the OCR ensemble for best results
-                extracted_text, processed_img_for_ocr, ocr_result_details = ocr_ensemble(img_cv)
-
-                # Classify using the extracted features and pre-processed image
-                result = classify_text(img_cv, processed_img_for_ocr, extracted_text)
-                
-                st.markdown('<div class="card">', unsafe_allow_html=True)
-                st.subheader("📝 Extracted Text")
-                if extracted_text.strip():
-                    st.text_area("", extracted_text, height=200)
-                    b64_text = base64.b64encode(extracted_text.encode()).decode()
-                    st.markdown(f"""
-                        <a class="copy-btn" href="data:text/plain;base64,{b64_text}" download="extracted_text.txt">⬇ Download Text</a>
-                    """, unsafe_allow_html=True)
-                else:
-                    st.warning("No text could be extracted from the image.")
-                st.markdown('</div>', unsafe_allow_html=True)
-
-                # --- Corrected Predicted Category Card UI ---
-                st.markdown('<div class="card">', unsafe_allow_html=True)
-                st.subheader("📌 Predicted Category")
-                if result['category']:
-                    category_class = ""
-                    if result['category'] == 'Invoice':
-                        category_class = "success"
-                    elif result['category'] == 'Form':
-                        category_class = "info"
-                    else:
-                        category_class = "warning"
-
-                    st.markdown(f"""
-                        <div class="predicted-category-card {category_class}">
-                            <h3>{result['category']}</h3>
-                            <p>Confidence: {result['score']*100:.1f}%</p>
-                        </div>
-                    """, unsafe_allow_html=True)
-                    if result.get('ml_label'):
-                        st.write(f"<span style='font-size:0.92rem;color:#222'><b>ML Model Prediction:</b> {result['ml_label']} ({result['ml_conf']*100:.1f}%)</span>", unsafe_allow_html=True)
-                else:
-                    st.warning("Could not classify the image.")
-                st.markdown('</div>', unsafe_allow_html=True)
-                # --- End of fix ---
-
-                st.markdown('<div class="card">', unsafe_allow_html=True)
-                st.subheader("📊 Classification Metrics")
-                metric_bar("Text Pixels Ratio", result['text_pixels_ratio'], 0.05)
-                metric_bar("Edge Density", result['edge_density'], 0.05)
-                metric_bar("Color Variance", result['color_variance'], 1.0)
-                st.write(f"- **Aspect Ratio:** `{result['aspect_ratio']:.2f}`")
-                st.write(f"- **Image Size:** `{result['width']} x {result['height']}`")
-                st.markdown('</div>', unsafe_allow_html=True)
-
-                st.markdown('<div class="card">', unsafe_allow_html=True)
-                st.subheader("⚙️ Pre-processing & OCR Details")
-                st.write(f"**OCR PSM Mode:** `{ocr_result_details['psm']}`")
-                st.write(f"**OCR Variant:** `{ocr_result_details['variant']}`")
-                st.write(f"**Average OCR Confidence:** `{ocr_result_details['conf']:.2f}`")
-                st.markdown('</div>', unsafe_allow_html=True)
-
-            except Exception as e:
-                st.error(f"An unexpected error occurred during processing: {e}")
-                st.info("Please try uploading a different image.")
-    else:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.info("Upload an image to see results.")
-        st.markdown('</div>', unsafe_allow_html=True)
-
-# --- Footer ---
-st.markdown("""
-<div class="footer">
-    Developed by <b>Praix Tech</b> & <b>Jahsmine</b> for educational & research purposes under the supervision of <b>Mrs. Oguniyi</b>.<br>
-    <b>Disclaimer:</b> This tool is intended solely for educational use.<br>
-    <a class="gh-link" href="https://github.com/Praiz22/ocr-tech" target="_blank">
-        <img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" alt="GitHub" /> View on GitHub
-    </a>
-</div>
-""", unsafe_allow_html=True)
+st.markdown(
+    """<div class="footer-glass"><small>© 2025 - Futuristic OCR Dashboard</small></div>""",
+    unsafe_allow_html=True
+)

@@ -1,0 +1,51 @@
+body {
+    background: linear-gradient(135deg, #090e23 0%, #1b2445 100%);
+    color: #e4eaff;
+    font-family: 'Inter', 'Segoe UI', sans-serif;
+}
+.glass-header {
+    background: rgba(36, 48, 78, 0.82);
+    padding: 2rem;
+    border-radius: 35px;
+    margin-bottom: 30px;
+    text-align: center;
+    backdrop-filter: blur(8px);
+    border: 1.5px solid #2e3a5f60;
+    box-shadow: 0 10px 30px #0aefff33;
+}
+.glass-card, .footer-glass {
+    background: rgba(24, 34, 60, 0.65);
+    border-radius: 22px;
+    box-shadow: 0 4px 32px #0aefff30, 0 1.5px 10px #2e3a5f30;
+    border: 1.2px solid #0aefff40;
+    padding: 1.2rem 2rem 1.8rem 2rem;
+    margin: 1.5rem 0;
+    backdrop-filter: blur(8px);
+    animation: fade-in 1s;
+}
+.metric-glass {
+    background: rgba(0, 180, 216, 0.09);
+    border-radius: 10px;
+    padding: 0.7rem 1.3rem;
+    display: inline-block;
+    margin-right: 1.2rem;
+    font-size: 1.12rem;
+    box-shadow: 0 0 12px #0aefff33;
+    border: 1.2px solid #0aefff30;
+    transition: box-shadow 0.3s;
+}
+.footer-glass {
+    margin-top: 2.5rem;
+    padding: 1rem;
+    text-align: center;
+    color: #6ee2ff;
+    font-size: 0.97rem;
+    border-radius: 14px;
+    background: rgba(36, 48, 78, 0.45);
+    border: 1px solid #0aefff22;
+    box-shadow: 0 4px 16px #0aefff28;
+}
+@keyframes fade-in {
+    from { opacity: 0; transform: translateY(14px);}
+    to { opacity: 1; transform: translateY(0);}
+}

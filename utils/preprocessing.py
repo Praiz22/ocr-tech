@@ -1,23 +1,12 @@
-import cv2
-import numpy as np
+import streamlit as st
+from PIL import Image
 
-def preprocess_image(img_bgr):
-    """
-    Applies image preprocessing steps for better OCR results.
-    """
-    if img_bgr is None or img_bgr.size == 0:
-        raise ValueError("Input image is empty.")
-
-    # Convert to grayscale
-    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
-
-    # Apply Gaussian blur to reduce noise
-    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-
-    # Use Adaptive Thresholding to handle varying lighting conditions
-    processed_img = cv2.adaptiveThreshold(
-        blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-        cv2.THRESH_BINARY, 11, 2
-    )
-
-    return processed_img
+def display_preprocessing_section():
+    st.markdown('<div class="glass-card"><h3>📷 Upload & Preprocess</h3>', unsafe_allow_html=True)
+    uploaded_file = st.file_uploader("Upload an image", type=["png", "jpg", "jpeg"])
+    if uploaded_file:
+        image = Image.open(uploaded_file)
+        st.image(image, caption="Original Image", use_column_width=True)
+        # Placeholder for preprocessing metrics
+        st.markdown('<div class="metric-glass">Preprocessing metrics will appear here.</div>', unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)

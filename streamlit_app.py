@@ -1,144 +1,103 @@
+# app.py
 import streamlit as st
-from PIL import Image
-import time
+import cv2
 import numpy as np
+from PIL import Image
+import time  # For simulating progress
+from ocr_model import load_ocr_model, predict_text
+from utils import preprocess_image
 
-# === Inject your custom CSS (adapted from your HTML) ===
+# Load CSS
 with open("style.css") as f:
     st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
-st.markdown(
-    """
-    <div class="glow"></div>
-    <div class="shell">
-      <div class="hero fade-in">
-        <div class="brand">
-          <div class="logo"></div>
-          <div>
-            <div class="title">Praix Tech — OCR Lab</div>
-            <div class="subtitle">Futuristic UI Prototype • Upload → Preprocess → Train → Predict</div>
-          </div>
-        </div>
-        <button class="btn" id="startDemo">Start Demo</button>
-      </div>
+# Hero Section
+st.markdown("""
+    <div class="hero">
+        <div class="branding">FuturOCR</div>
+        <h1 class="title">Advanced OCR Application</h1>
+        <p class="subtitle">Extract text from images with cutting-edge AI in a futuristic interface.</p>
     </div>
-    """, unsafe_allow_html=True
-)
+""", unsafe_allow_html=True)
 
-# === Upload Section ===
-with st.container():
-    st.markdown("""
-    <section class="card col-12 fade-in">
-      <div class="head">
-        <h3>Upload Image</h3>
-        <span class="soft-accent">10s processing budget</span>
-      </div>
-      """, unsafe_allow_html=True)
-    uploaded_file = st.file_uploader("", type=["png", "jpg", "jpeg"], key="fileInput")
-    st.markdown("</section>", unsafe_allow_html=True)
-    if uploaded_file:
-        image = Image.open(uploaded_file)
-        st.image(image, caption="Original Image", use_column_width=True)
+# Image Upload Panel
+st.markdown('<div class="card fade-in">', unsafe_allow_html=True)
+st.subheader("Upload Image")
+uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "png", "jpeg"])
+if uploaded_file is not None:
+    image = Image.open(uploaded_file)
+    st.image(image, caption="Uploaded Image Preview", use_column_width=True)
+st.markdown('</div>', unsafe_allow_html=True)
 
-# === Preprocessing Section ===
-with st.container():
-    st.markdown("""
-    <section class="card col-8 fade-in delay">
-      <div class="head">
-        <h3>Data Preprocessing</h3>
-        <span class="soft-accent" id="preStatus">Idle</span>
-      </div>
-      <div class="steps" id="preSteps">
-        <span class="chip active">Noise Removal</span>
-        <span class="chip">Thresholding</span>
-        <span class="chip">Deskew</span>
-        <span class="chip">Normalization</span>
-        <span class="chip">Ready</span>
-      </div>
-      <div class="metrics" style="margin-top:14px">
-        <div class="metric">
-          <div class="row"><span class="label">Noise Removal</span><span class="value" id="m_noise">0%</span></div>
-          <div class="bar"><i id="b_noise"></i></div>
-        </div>
-        <div class="metric">
-          <div class="row"><span class="label">Thresholding</span><span class="value" id="m_thresh">0%</span></div>
-          <div class="bar"><i id="b_thresh"></i></div>
-        </div>
-        <div class="metric">
-          <div class="row"><span class="label">Deskew</span><span class="value" id="m_skew">0%</span></div>
-          <div class="bar"><i id="b_skew"></i></div>
-        </div>
-        <div class="metric">
-          <div class="row"><span class="label">Normalization</span><span class="value" id="m_norm">0%</span></div>
-          <div class="bar"><i id="b_norm"></i></div>
-        </div>
-      </div>
-    </section>
-    """, unsafe_allow_html=True)
-    # Optionally, add live metric updates here using st.progress or st.empty()
+# Preprocessing Panel
+if uploaded_file is not None:
+    st.markdown('<div class="card fade-in">', unsafe_allow_html=True)
+    st.subheader("Image Preprocessing")
+    
+    # Simulate preprocessing steps with progress
+    steps = ["Noise Removal", "Thresholding", "Deskew", "Normalization"]
+    preprocessed_img = np.array(image.convert('RGB'))  # Convert to OpenCV format
+    progress_bar = st.progress(0)
+    
+    for i, step in enumerate(steps):
+        st.markdown(f"<p class='step'>{step}</p>", unsafe_allow_html=True)
+        time.sleep(0.5)  # Simulate time
+        progress_bar.progress((i + 1) / len(steps))
+        
+        # Apply actual preprocessing step-by-step
+        if step == "Noise Removal":
+            preprocessed_img = cv2.medianBlur(preprocessed_img, 5)
+        elif step == "Thresholding":
+            gray = cv2.cvtColor(preprocessed_img, cv2.COLOR_RGB2GRAY)
+            preprocessed_img = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+        elif step == "Deskew":
+            # Placeholder for deskew (simplified, actual logic in utils)
+            preprocessed_img = utils.deskew_image(preprocessed_img)
+        elif step == "Normalization":
+            preprocessed_img = cv2.resize(preprocessed_img, (224, 224))  # Example size
+            preprocessed_img = preprocessed_img / 255.0  # Normalize
+    
+    st.image(preprocessed_img, caption="Preprocessed Image", use_column_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
-# === Training Panel ===
-with st.container():
-    st.markdown("""
-    <section class="card col-4 fade-in delay">
-      <div class="head">
-        <h3>Training Model</h3>
-        <span class="soft-accent" id="trainStatus">Paused</span>
-      </div>
-      <div class="metric" style="margin-bottom:12px">
-        <div class="row"><span class="label">Epoch</span><span class="value" id="m_epoch">0 / 10</span></div>
-        <div class="bar"><i id="b_epoch"></i></div>
-      </div>
-      <div class="spark" style="margin-bottom:10px">
-        <div style="flex:1">
-          <div class="row" style="margin-bottom:8px">
-            <span class="label">Accuracy</span><span class="value" id="m_acc">0%</span>
-          </div>
-          <div class="bar"><i id="b_acc"></i></div>
-        </div>
-      </div>
-      <div class="spark">
-        <div style="flex:1">
-          <div class="row" style="margin-bottom:8px">
-            <span class="label">Loss</span><span class="value" id="m_loss">1.000</span>
-          </div>
-          <div class="bar"><i id="b_loss"></i></div>
-        </div>
-      </div>
-    </section>
-    """, unsafe_allow_html=True)
-    # Add st.button for "Train" and show live metrics with st.empty()
+    # Training Panel (Placeholder: Simulate or show static training metrics)
+    st.markdown('<div class="card fade-in">', unsafe_allow_html=True)
+    st.subheader("Model Training Status")
+    st.write("Displaying simulated training progress for demonstration. In production, load real history.")
+    
+    epochs = 10
+    epoch_progress = st.progress(0)
+    accuracy_progress = st.progress(0)
+    loss_progress = st.progress(0)
+    
+    for epoch in range(epochs):
+        time.sleep(0.3)  # Simulate
+        epoch_progress.progress((epoch + 1) / epochs)
+        accuracy = (epoch + 1) / epochs  # Simulated increasing accuracy
+        loss = 1 - accuracy  # Simulated decreasing loss
+        accuracy_progress.progress(accuracy)
+        loss_progress.progress(loss)
+        st.markdown(f"<p>Epoch: {epoch + 1}/{epochs} | Accuracy: {accuracy:.2f} | Loss: {loss:.2f}</p>", unsafe_allow_html=True)
+    
+    st.markdown('</div>', unsafe_allow_html=True)
 
-# === Prediction Results Section ===
-with st.container():
-    st.markdown("""
-    <section class="card col-12 fade-in delay2">
-      <div class="head">
-        <h3>Prediction Results</h3>
-        <span class="soft-accent" id="predStatus">Waiting for input</span>
-      </div>
-      <div class="grid" style="gap:16px">
-        <div class="col-8">
-          <div class="result">
-            <span class="tag soft-accent">Extracted Text</span>
-            <div class="mono" id="ocrText">—</div>
-          </div>
-        </div>
-        <div class="col-4">
-          <div class="result">
-            <span class="tag soft-accent">Prediction</span>
-            <div class="mono"><strong id="predLabel">—</strong></div>
-            <div class="confidence">
-              <div class="row"><span class="label">Confidence</span><span class="value" id="confVal">0%</span></div>
-              <div class="bar"><i id="confBar"></i></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-    """, unsafe_allow_html=True)
-    # Add OCR & prediction logic here, updating the content
-
-# === JS for Glow Animation (optional in Streamlit, handled by CSS above) ===
-
-# Footer or other elements can be added as needed.
+    # Prediction Results Panel
+    st.markdown('<div class="card fade-in">', unsafe_allow_html=True)
+    st.subheader("OCR Prediction Results")
+    
+    try:
+        model = load_ocr_model("model/custom_ocr_model.h5")  # Or .pt/.onnx with appropriate loader
+        extracted_text, label, confidence = predict_text(model, preprocessed_img)
+        
+        st.markdown(f"<p class='result'>Extracted Text: {extracted_text}</p>", unsafe_allow_html=True)
+        st.markdown(f"<p class='result'>Predicted Label: {label}</p>", unsafe_allow_html=True)
+        
+        # Confidence bar
+        st.progress(confidence)
+        st.markdown(f"<p>Confidence: {confidence * 100:.2f}%</p>", unsafe_allow_html=True)
+    except Exception as e:
+        st.error(f"Error during prediction: {str(e)}")
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+else:
+    st.info("Please upload an image to begin.")

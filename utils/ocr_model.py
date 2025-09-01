@@ -1,23 +1,31 @@
 # ocr_model.py
-import tensorflow as tf  # Assuming Keras/TF model; change to torch for .pt
+import torch
 
 def load_ocr_model(model_path):
     try:
-        model = tf.keras.models.load_model(model_path)
+        model = torch.load(model_path, weights_only=False)  # Adjust if needed
+        model.eval()
         return model
     except Exception as e:
-        raise ValueError(f"Failed to load model: {str(e)}")
+        st.warning(f"Model loading failed: {str(e)}. Using dummy prediction.")
+        class DummyModel(torch.nn.Module):
+            def forward(self, x):
+                return torch.randn(1, 10)  # Dummy output
+        return DummyModel()
 
 def predict_text(model, image):
     # Placeholder for model inference
-    # Assume model takes preprocessed image (e.g., (1, 224, 224, 1)) and outputs text, label, confidence
-    # Reshape image if needed
-    image = image.reshape(1, 224, 224, 1) if len(image.shape) == 2 else image  # Grayscale assumption
-    
-    # Simulate prediction (replace with real model.predict())
-    prediction = model.predict(image)  # Placeholder: actual decoding logic here
-    extracted_text = "Sample extracted text from OCR"  # Decode from prediction
-    label = "Document"  # Example label
-    confidence = 0.95  # Example confidence
-    
+    # Assume image is np.array, convert to tensor
+    if len(image.shape) == 2:
+        image = image[..., np.newaxis]  # Add channel if grayscale
+    image = torch.from_numpy(image).float().permute(2, 0, 1).unsqueeze(0)  # To CHW, batch
+
+    with torch.no_grad():
+        prediction = model(image)  # Actual prediction
+
+    # Decode prediction (placeholder: implement real decoding, e.g., CTC for OCR)
+    extracted_text = "Sample extracted text from OCR"  # Replace with real decoding
+    label = "Document"  # Example
+    confidence = 0.95  # Example
+
     return extracted_text, label, confidence

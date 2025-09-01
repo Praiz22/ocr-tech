@@ -1,31 +1,40 @@
-# ocr_model.py
+# utils/ocr_model.py
 import torch
+import streamlit as st
+import numpy as np
 
 def load_ocr_model(model_path):
     try:
-        model = torch.load(model_path, weights_only=False)  # Adjust if needed
+        model = torch.load(model_path, weights_only=False, map_location=torch.device('cpu'))
         model.eval()
         return model
     except Exception as e:
-        st.warning(f"Model loading failed: {str(e)}. Using dummy prediction.")
+        st.warning(f"Model loading failed: {str(e)}. Using dummy model.")
         class DummyModel(torch.nn.Module):
             def forward(self, x):
-                return torch.randn(1, 10)  # Dummy output
+                return torch.randn(1, 3), torch.randn(1, 10)  # Classification + OCR
         return DummyModel()
 
-def predict_text(model, image):
-    # Placeholder for model inference
-    # Assume image is np.array, convert to tensor
+def classify_image(model, image, return_confidence=False):
     if len(image.shape) == 2:
-        image = image[..., np.newaxis]  # Add channel if grayscale
-    image = torch.from_numpy(image).float().permute(2, 0, 1).unsqueeze(0)  # To CHW, batch
+        image = image[..., np.newaxis]
+    image = torch.from_numpy(image).float().permute(2, 0, 1).unsqueeze(0)
 
     with torch.no_grad():
-        prediction = model(image)  # Actual prediction
+        class_logits, _ = model(image)
+        probs = torch.softmax(class_logits, dim=1)
+        confidence, class_idx = torch.max(probs, dim=1)
+        class_label = ["pictures", "screenshots", "documents"][class_idx.item()]
 
-    # Decode prediction (placeholder: implement real decoding, e.g., CTC for OCR)
-    extracted_text = "Sample extracted text from OCR"  # Replace with real decoding
-    label = "Document"  # Example
-    confidence = 0.95  # Example
+    return (class_label, confidence.item()) if return_confidence else class_label
 
-    return extracted_text, label, confidence
+def predict_text(model, image):
+    if len(image.shape) == 2:
+        image = image[..., np.newaxis]
+    image = torch.from_numpy(image).float().permute(2, 0, 1).unsqueeze(0)
+
+    with torch.no_grad():
+        _, ocr_logits = model(image)
+        extracted_text = "Sample extracted text from OCR"  # Replace with CTC decoding
+        confidence = 0.95
+    return extracted_text, confidence

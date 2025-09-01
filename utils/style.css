@@ -1,118 +1,85 @@
-/* utils/style.css */
+/* style.css */
 body {
-    background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
-    color: #ffffff;
     font-family: 'Orbitron', sans-serif;
+    background: linear-gradient(135deg, #0d1b2a 0%, #1b263b 100%);
+    color: #e0e1dd;
     margin: 0;
     padding: 0;
 }
-
 .header {
+    background: #1b263b;
+    padding: 20px;
     text-align: center;
-    padding: 20px 0;
+    border-bottom: 2px solid #00ff00;
 }
-
 .branding {
-    font-size: 1.8em;
-    color: #00ffff;
-    text-shadow: 0 0 10px #00ffff;
+    font-size: 2em;
+    font-weight: bold;
+    color: #00ff00;
 }
-
 .subtitle {
-    font-size: 1.1em;
-    color: #cccccc;
-    margin-top: 5px;
+    font-size: 1em;
+    color: #778da9;
 }
-
 .start-demo {
-    background: rgba(0, 255, 255, 0.2);
-    border: 1px solid #00ffff;
-    color: #00ffff;
+    background: #00ff00;
+    color: #0d1b2a;
+    border: none;
     padding: 10px 20px;
-    border-radius: 5px;
+    font-size: 1em;
     cursor: pointer;
+    border-radius: 5px;
     margin: 10px auto;
     display: block;
-    transition: all 0.3s;
 }
-
 .start-demo:hover {
-    background: #00ffff;
-    color: #0f0c29;
-    text-shadow: none;
+    background: #00cc00;
 }
-
 .card {
-    background: rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(10px);
-    border-radius: 15px;
+    background: #1b263b;
+    border-radius: 10px;
     padding: 20px;
     margin: 20px;
-    box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
 }
-
-.status {
-    color: #ffff00;
-    font-weight: bold;
-    margin: 10px 0;
+.section-upload, .section-preprocess, .section-prediction {
+    animation: fadeIn 1s ease-in;
 }
-
-.step, .result, .metric {
-    display: flex;
-    align-items: center;
-    color: #00ff00;
-    font-weight: bold;
-    margin: 10px 0;
+@keyframes fadeIn {
+    0% { opacity: 0; transform: translateY(20px); }
+    100% { opacity: 1; transform: translateY(0); }
 }
-
-.step span, .result span, .metric span {
-    margin-left: auto;
-    color: #00ff00;
-}
-
-.progress-bar {
-    height: 10px;
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: 5px;
-    margin-left: 10px;
-    flex-grow: 1;
-}
-
-.progress-bar.full {
-    background: #00ff00;
-}
-
-.progress-bar.empty {
-    background: rgba(255, 255, 255, 0.2);
-}
-
 .upload-area {
-    border: 2px dashed #00ffff;
+    border: 2px dashed #00ff00;
     padding: 20px;
     text-align: center;
-    color: #cccccc;
-    border-radius: 10px;
+    border-radius: 5px;
 }
-
-.fade-in {
-    animation: fade-in 0.8s ease-in;
+h2 {
+    color: #00ff00;
 }
-
-@keyframes fade-in {
-    from { opacity: 0; transform: translateY(20px); }
-    to { opacity: 1; transform: translateY(0); }
+.status {
+    color: #778da9;
 }
-
-@media (max-width: 768px) {
-    .card {
-        margin: 10px;
-        padding: 15px;
-    }
-    .branding {
-        font-size: 1.4em;
-    }
-    .subtitle {
-        font-size: 0.9em;
-    }
+.step, .metric, .result {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 10px 0;
+}
+.step span, .metric span, .result span {
+    color: #00ff00;
+}
+.progress-bar {
+    background: #415a77;
+    height: 10px;
+    border-radius: 5px;
+    flex-grow: 1;
+    margin-left: 10px;
+}
+.progress-bar.full {
+    background: linear-gradient(to right, #00ff00, #00cc00);
+}
+.progress-bar.empty {
+    background: #415a77;
 }

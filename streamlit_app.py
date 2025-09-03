@@ -152,7 +152,7 @@ st.markdown("""
     white-space: pre-wrap;
     word-wrap: break-word;
     font-family: 'Poppins', sans-serif;
-    color: var(--text-1);
+    color: var(--text-1) !important; /* Fixed: Added !important to ensure color override */
   }
   
   .button-row {
@@ -172,12 +172,9 @@ st.markdown("""
     border: none;
     cursor: pointer;
     transition: all 0.2s ease;
+    text-decoration: none; /* Fixed: Removed underline from buttons */
   }
   
-  .ocr-button, a.ocr-button {
-    text-decoration: none; /* Removed underline */
-  }
-
   .ocr-button:hover {
     background-color: var(--brand-2);
     transform: translateY(-2px);
@@ -211,7 +208,7 @@ st.markdown("""
     border-radius: var(--radius-md);
   }
 
-  .image-preview-container::before {
+  .image-preview-container.processing::before {
     content: '';
     position: absolute;
     top: 0;
@@ -273,22 +270,22 @@ def preprocess_image(image, processed_image_placeholder, status_text_placeholder
 
 def classify_document(text):
     """
-    Classifies the document based on features of the extracted text.
+    Classifies the document based on features of the extracted text using advanced regex.
     """
     text = text.lower()
     
-    # Enhanced keyword-based classification
+    # Enhanced keyword and regex pattern-based classification
     keywords = {
-        "invoice": ["invoice", "bill to", "invoice number", "tax", "payment due", "amount due", r"invoice\s*#", r"bill\s*date"],
-        "receipt": ["receipt", "thank you for your purchase", "total", "subtotal", "cashier", r"total\s*usd", r"transaction\s*id"],
+        "invoice": ["invoice", "bill to", "invoice number", "tax", "payment due", "amount due", r"invoice\s*#", r"bill\s*date", r"total\s+amount"],
+        "receipt": ["receipt", "thank you for your purchase", "total", "subtotal", "cashier", r"total\s*usd", r"transaction\s*id", r"\$\d+\.\d{2}"],
         "report": ["report", "summary", "analysis", "findings", "conclusion", "abstract", "introduction", "methodology"],
-        "contract": ["contract", "agreement", "terms and conditions", "effective date", "parties", "herein", "whereas"],
+        "contract": ["contract", "agreement", "terms and conditions", "effective date", "parties", "herein", "whereas", r"this\s*agreement\s*is\s*made"],
         "memorandum": ["memorandum", "memo", "interoffice", "to:", "from:", "date:", "subject:"],
         "agenda": ["agenda", "meeting", "minutes", "discussion points", r"time:\s*\d{1,2}:\d{2}", r"location:\s*"],
-        "medical document": ["prescription", "rx", "refill", "patient", "diagnosis", "doctor", "hospital", "medical record"],
-        "resume": ["resume", "curriculum vitae", "experience", "education", "skills", "objective", "work history"],
-        "legal document": ["affidavit", "will", "deed", "court", "judgment", "plaintiff", "defendant", "statute"],
-        "financial statement": ["balance sheet", "income statement", "cash flow", "statement of changes", "assets", "liabilities"],
+        "medical document": ["prescription", "rx", "refill", "patient", "diagnosis", "doctor", "hospital", "medical record", "medication"],
+        "resume": ["resume", "curriculum vitae", "experience", "education", "skills", "objective", "work history", "phone:", "email:"],
+        "legal document": ["affidavit", "will", "deed", "court", "judgment", "plaintiff", "defendant", "statute", "legal", "counsel"],
+        "financial statement": ["balance sheet", "income statement", "cash flow", "statement of changes", "assets", "liabilities", "revenue", "expenses"],
     }
     
     best_match = "Miscellaneous"
@@ -327,8 +324,8 @@ def run_ocr_and_classify(image):
     # Step 1: Pre-process the image
     original_col, processed_col = st.columns(2)
     with original_col:
-        # Added a class for the animation container
-        st.markdown('<div class="image-preview-container">', unsafe_allow_html=True)
+        # Added a class to the container to trigger the animation
+        st.markdown(f'<div class="image-preview-container {"processing" if st.session_state.processing else ""}">', unsafe_allow_html=True)
         st.image(image, caption="Original Image", use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
         
@@ -429,6 +426,8 @@ if 'uploaded_image' not in st.session_state:
     st.session_state.uploaded_image = None
 if 'processing' not in st.session_state:
     st.session_state.processing = False
+if 'last_uploaded_filename' not in st.session_state:
+    st.session_state.last_uploaded_filename = None
 
 # Main App Layout
 st.markdown("""
@@ -441,22 +440,24 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # File Uploader section with drag-and-drop
-with st.container():
-    st.markdown("""
-    <div class="ocr-container ocr-card">
-        <div class="file-upload-section">
-            <h4 style="color:var(--text-1);">Upload an Image</h4>
-            <p style="color:var(--text-2);">Drag and drop a file here or click below to choose a file.</p>
-        </div>
+st.markdown("""
+<div class="ocr-container ocr-card">
+    <div class="file-upload-section">
+        <h4 style="color:var(--text-1);">Upload an Image</h4>
+        <p style="color:var(--text-2);">Drag and drop a file here or click below to choose a file.</p>
+""", unsafe_allow_html=True)
+
+uploaded_file = st.file_uploader("", type=["png", "jpg", "jpeg"], key="file_uploader", label_visibility="collapsed")
+
+st.markdown("""
     </div>
-    """, unsafe_allow_html=True)
-    
-    uploaded_file = st.file_uploader("", type=["png", "jpg", "jpeg"], key="file_uploader", label_visibility="collapsed")
+</div>
+""", unsafe_allow_html=True)
     
 # Logic to handle file upload and state management
 if uploaded_file:
     # Check if a new file has been uploaded
-    if 'last_uploaded_filename' not in st.session_state or st.session_state.last_uploaded_filename != uploaded_file.name:
+    if st.session_state.last_uploaded_filename != uploaded_file.name:
         st.session_state.last_uploaded_filename = uploaded_file.name
         
         # Reset state for new processing

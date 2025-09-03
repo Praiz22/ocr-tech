@@ -5,6 +5,7 @@ from io import BytesIO
 import re
 import time
 import numpy as np
+import base64
 
 # Set Streamlit to use a wide layout and a custom title.
 st.set_page_config(layout="wide", page_title="OCR-TECH", initial_sidebar_state="collapsed")
@@ -18,8 +19,8 @@ st.markdown("""
     --bg-1: #ffffff;
     --bg-2: #fff5eb;
     --bg-3: #ffe7cc;
-    --card-bg: rgba(255, 255, 255, 0.24);
-    --card-border: rgba(255, 255, 255, 0.36);
+    --card-bg: rgba(255, 255, 255, 0.5); /* Made more transparent for a glass effect */
+    --card-border: rgba(255, 255, 255, 0.6);
     --card-shadow: 0 18px 44px rgba(0, 0, 0, 0.28);
     --text-1: #1f1f1f;
     --text-2: #5a5a5a;
@@ -227,19 +228,19 @@ def preprocess_image(image, processed_image_placeholder, status_text_placeholder
     Simulates a full pipeline with dynamic updates.
     """
     
-    status_text_placeholder.markdown('<h4 id="predStatus">Normalizing Image...</h4>', unsafe_allow_html=True)
+    status_text_placeholder.markdown('<h4 id="predStatus" style="color:var(--text-1);">Normalizing Image...</h4>', unsafe_allow_html=True)
     time.sleep(0.5)
     
     # Grayscale conversion for normalization
     grayscale_image = ImageOps.grayscale(image)
-    processed_image_placeholder.image(grayscale_image, caption="Processed Image", use_column_width=True)
+    processed_image_placeholder.image(grayscale_image, caption="Processed Image", use_container_width=True)
     
-    status_text_placeholder.markdown('<h4 id="predStatus">Deskewing...</h4>', unsafe_allow_html=True)
+    status_text_placeholder.markdown('<h4 id="predStatus" style="color:var(--text-1);">Deskewing...</h4>', unsafe_allow_html=True)
     time.sleep(0.5)
     # Placeholder for deskewing logic
     deskewed_image = grayscale_image 
 
-    status_text_placeholder.markdown('<h4 id="predStatus">Removing Noise...</h4>', unsafe_allow_html=True)
+    status_text_placeholder.markdown('<h4 id="predStatus" style="color:var(--text-1);">Removing Noise...</h4>', unsafe_allow_html=True)
     time.sleep(0.5)
     # Placeholder for noise removal logic
     denoised_image = deskewed_image
@@ -252,52 +253,81 @@ def classify_document(text):
     """
     text = text.lower()
     
-    document_keywords = ["invoice", "receipt", "report", "statement", "document", "proposal", "contract", "memorandum", "agenda"]
-    if any(keyword in text for keyword in document_keywords):
-        return "Document", 95 
+    # Enhanced keyword-based classification
+    if "invoice" in text or "bill to" in text or "invoice number" in text:
+        return "Invoice", 98
+    if "receipt" in text or "thank you for your purchase" in text:
+        return "Receipt", 97
+    if "report" in text or "summary" in text or "analysis" in text:
+        return "Report", 95
+    if "contract" in text or "agreement" in text or "terms and conditions" in text:
+        return "Contract", 96
+    if "memorandum" in text or "memo" in text or "interoffice" in text:
+        return "Memorandum", 94
+    if "agenda" in text or "meeting" in text or "minutes" in text:
+        return "Agenda", 93
+    if "prescription" in text or "rx" in text or "refill" in text:
+        return "Medical Document", 92
 
+    # Pattern-based classification
     letter_pattern = r"(dear|sincerely|best regards|regards|from:|to:|date:|re:|subject:|yours sincerely|yours faithfully|attachment:)"
     if re.search(letter_pattern, text):
         return "Letter", 90
 
+    # Heuristic-based classification
     word_count = len(text.split())
     line_count = len(text.split('\n'))
-    if word_count > 100 and line_count > 10:
-        return "Document", 85
     
+    if word_count > 250 and line_count > 20:
+        return "Document", 88
     if word_count < 50 and line_count < 5:
-        return "Screenshot", 80
+        return "Screenshot/Short Text", 80
     
-    return "Miscellaneous", 60
+    return "Miscellaneous", 75
 
 
 def run_ocr_and_classify(image):
     """
     Main function to process the image and get OCR and classification results.
     """
+    
     # Create placeholders for dynamic UI elements
     status_text = st.empty()
     metric_grid_placeholder = st.empty()
     text_output_placeholder = st.empty()
     
-    status_text.markdown('<h4 id="predStatus">Running OCR & inference...</h4>', unsafe_allow_html=True)
+    status_text.markdown('<h4 id="predStatus" style="color:var(--text-1);">Running OCR & inference...</h4>', unsafe_allow_html=True)
     
     # Step 1: Pre-process the image
     original_col, processed_col = st.columns(2)
     with original_col:
-        st.image(image, caption="Original Image", use_column_width=True)
+        st.image(image, caption="Original Image", use_container_width=True)
     with processed_col:
         processed_image_placeholder = st.empty()
         processed_image = preprocess_image(image, processed_image_placeholder, status_text)
     
     # Step 2: Perform OCR
-    status_text.markdown('<h4 id="predStatus">Extracting Text...</h4>', unsafe_allow_html=True)
+    status_text.markdown('<h4 id="predStatus" style="color:var(--text-1);">Extracting Text...</h4>', unsafe_allow_html=True)
     ocr_text = pytesseract.image_to_string(processed_image, config='--psm 6')
 
-    # Step 3: Classify the document
-    status_text.markdown('<h4 id="predStatus">Classifying Document...</h4>', unsafe_allow_html=True)
+    # Step 3: Simulate "training" phase for metrics
+    epochs = 10
+    epoch_val = st.empty()
+    epoch_bar = st.empty()
+    for e in range(1, epochs + 1):
+        epoch_val.markdown(f'<h4 style="color:var(--text-1);">Simulating Training: Epoch {e}/{epochs}</h4>', unsafe_allow_html=True)
+        epoch_bar.progress(e / epochs)
+        time.sleep(0.1)
+    
+    # Step 4: Classify the document
+    status_text.markdown('<h4 id="predStatus" style="color:var(--text-1);">Classifying Document...</h4>', unsafe_allow_html=True)
     label, confidence = classify_document(ocr_text)
 
+    # Calculate additional metrics
+    word_count = len(ocr_text.split())
+    char_count = len(ocr_text.replace(" ", "").replace("\n", ""))
+    avg_word_length = char_count / word_count if word_count > 0 else 0
+    
     # Dynamic updates
     metric_grid_placeholder.markdown(f"""
     <div class="results-grid">
@@ -313,17 +343,41 @@ def run_ocr_and_classify(image):
                 <div class="progress-bar success" style="width:{confidence}%;"></div>
             </div>
         </div>
+        <div class="metric-card">
+            <h4>Text Count</h4>
+            <div class="metric-value">{word_count}</div>
+            <p style="color:var(--text-2); font-size:0.85rem; margin:0.5rem 0 0;">(Words extracted)</p>
+        </div>
+        <div class="metric-card">
+            <h4>Characters/Word</h4>
+            <div class="metric-value">{avg_word_length:.2f}</div>
+            <p style="color:var(--text-2); font-size:0.85rem; margin:0.5rem 0 0;">(Average length)</p>
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
     text_output_placeholder.markdown(f"""
     <div class="text-output-card" style="margin-top: 1.5rem;">
-        <h4>Extracted Text</h4>
-        <pre id="ocrText">{ocr_text}</pre>
+        <h4 style="color:var(--text-1);">Extracted Text</h4>
+        <pre id="ocrText" style="color:var(--text-1);">{ocr_text}</pre>
+        <div class="button-row">
+            <button class="ocr-button" onclick="copyToClipboard()">Copy Text</button>
+            <a href="data:text/plain;charset=utf-8,{base64.b64encode(ocr_text.encode()).decode()}" download="extracted_text.txt" class="ocr-button" style="text-decoration: none; color: white;">Download .txt</a>
+        </div>
     </div>
+    <script>
+        function copyToClipboard() {{
+            const textToCopy = document.getElementById('ocrText').innerText;
+            navigator.clipboard.writeText(textToCopy).then(() => {{
+                alert('Text copied to clipboard!');
+            }}).catch(err => {{
+                console.error('Could not copy text: ', err);
+            }});
+        }}
+    </script>
     """, unsafe_allow_html=True)
     
-    status_text.markdown('<h4 id="predStatus">Done!</h4>', unsafe_allow_html=True)
+    status_text.markdown('<h4 id="predStatus" style="color:var(--text-1);">Done!</h4>', unsafe_allow_html=True)
 
 # --- Streamlit UI Components ---
 
@@ -348,8 +402,8 @@ with st.container():
     st.markdown("""
     <div class="ocr-container ocr-card">
         <div class="file-upload-section">
-            <h4>Upload an Image</h4>
-            <p>Drag and drop a file here or click below to choose a file.</p>
+            <h4 style="color:var(--text-1);">Upload an Image</h4>
+            <p style="color:var(--text-2);">Drag and drop a file here or click below to choose a file.</p>
             <div class="file-input-label-container">
                 <label for="fileInput" class="file-input-label">Choose File</label>
             </div>
@@ -369,34 +423,12 @@ with st.container():
             st.error("Error: The file you uploaded could not be identified as a valid image. Please try a different file.")
             st.session_state.uploaded_image = None
 
-# Display uploaded image and a Process button
-if st.session_state.uploaded_image:
-    st.markdown("""
-    <div class="ocr-container" style="margin-top: -2rem;">
-        <div class="ocr-card">
-            <h4>Image Preview</h4>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-top: 1.5rem;">
-                <div style="text-align: center;">
-                    <h5>Original</h5>
-                    <div id="originalImagePreview"></div>
-                </div>
-                <div style="text-align: center;">
-                    <h5>Processed</h5>
-                    <div id="processedImagePreview"></div>
-                </div>
-            </div>
-        </div>
-        <div class="button-row">
-            <button class="ocr-button" onclick="window.parent.document.querySelector('[data-testid=stButton][kind=secondary]').click()">Process Image</button>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    if st.button("Process Image", key="process_button"):
-        st.session_state.processing = True
-        image_to_process = Image.open(BytesIO(st.session_state.uploaded_image))
-        run_ocr_and_classify(image_to_process)
-        st.session_state.processing = False
+# Automatically run the process if an image is uploaded
+if st.session_state.uploaded_image and not st.session_state.processing:
+    st.session_state.processing = True
+    image_to_process = Image.open(BytesIO(st.session_state.uploaded_image))
+    run_ocr_and_classify(image_to_process)
+    st.session_state.processing = False
 
 # Footer
 st.markdown("""

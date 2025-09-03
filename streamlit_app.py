@@ -152,7 +152,7 @@ st.markdown("""
     white-space: pre-wrap;
     word-wrap: break-word;
     font-family: 'Poppins', sans-serif;
-    color: var(--text-1) !important; /* Fixed: Added !important to ensure color override */
+    color: var(--text-1) !important;
   }
   
   .button-row {
@@ -172,7 +172,7 @@ st.markdown("""
     border: none;
     cursor: pointer;
     transition: all 0.2s ease;
-    text-decoration: none; /* Fixed: Removed underline from buttons */
+    text-decoration: none;
   }
   
   .ocr-button:hover {
@@ -242,6 +242,13 @@ st.markdown("""
 # pytesseract.pytesseract.tesseract_cmd = r'/usr/bin/tesseract'
 
 # --- Core Logic for OCR and Classification ---
+def clean_text(text):
+    """Removes non-alphanumeric characters and excessive whitespace."""
+    # Remove all non-alphanumeric characters except for spaces and newlines
+    cleaned_text = re.sub(r'[^a-zA-Z0-9\s\n]', '', text)
+    # Replace multiple whitespaces with a single space
+    cleaned_text = re.sub(r'\s+', ' ', cleaned_text).strip()
+    return cleaned_text
 
 def preprocess_image(image, processed_image_placeholder, status_text_placeholder):
     """
@@ -337,23 +344,34 @@ def run_ocr_and_classify(image):
     status_text.markdown('<h4 id="predStatus" style="color:var(--text-1);">Extracting Text...</h4>', unsafe_allow_html=True)
     ocr_text = pytesseract.image_to_string(processed_image, config='--psm 6')
 
-    # Step 3: Simulate "training" phase for metrics
-    epochs = 10
-    epoch_val = st.empty()
-    epoch_bar = st.empty()
-    for e in range(1, epochs + 1):
-        epoch_val.markdown(f'<h4 style="color:var(--text-1);">Simulating Training: Epoch {e}/{epochs}</h4>', unsafe_allow_html=True)
-        epoch_bar.progress(e / epochs)
-        time.sleep(0.1)
-    
-    # Step 4: Classify the document
-    status_text.markdown('<h4 id="predStatus" style="color:var(--text-1);">Classifying Document...</h4>', unsafe_allow_html=True)
-    label, confidence = classify_document(ocr_text)
+    # Step 3: Clean text and check if meaningful text was found
+    cleaned_ocr_text = clean_text(ocr_text)
+    if len(cleaned_ocr_text) < 50: # Threshold to determine if it's a "Picture"
+        label = "Picture"
+        confidence = 99
+        word_count = 0
+        char_count = 0
+        avg_word_length = 0
+        status_text.markdown('<h4 id="predStatus" style="color:var(--text-1);">No meaningful text found. Classifying as Picture.</h4>', unsafe_allow_html=True)
+    else:
+        # Step 4: Simulate "training" phase for metrics
+        epochs = 10
+        epoch_val = st.empty()
+        epoch_bar = st.empty()
+        for e in range(1, epochs + 1):
+            epoch_val.markdown(f'<h4 style="color:var(--text-1);">Simulating Training: Epoch {e}/{epochs}</h4>', unsafe_allow_html=True)
+            epoch_bar.progress(e / epochs)
+            time.sleep(0.1)
+        
+        # Step 5: Classify the document
+        status_text.markdown('<h4 id="predStatus" style="color:var(--text-1);">Classifying Document...</h4>', unsafe_allow_html=True)
+        label, confidence = classify_document(cleaned_ocr_text)
 
-    # Calculate additional metrics
-    word_count = len(ocr_text.split())
-    char_count = len(ocr_text.replace(" ", "").replace("\n", ""))
-    avg_word_length = char_count / word_count if word_count > 0 else 0
+        # Calculate additional metrics
+        word_count = len(cleaned_ocr_text.split())
+        char_count = len(cleaned_ocr_text.replace(" ", "").replace("\n", ""))
+        avg_word_length = char_count / word_count if word_count > 0 else 0
+        status_text.markdown('<h4 id="predStatus" style="color:var(--text-1);">Done!</h4>', unsafe_allow_html=True)
     
     # Dynamic updates
     metric_grid_placeholder.markdown(f"""
@@ -386,10 +404,10 @@ def run_ocr_and_classify(image):
     text_output_placeholder.markdown(f"""
     <div class="text-output-card" style="margin-top: 1.5rem;">
         <h4 style="color:var(--text-1);">Extracted Text</h4>
-        <pre id="ocrText" style="color:var(--text-1);">{ocr_text}</pre>
+        <pre id="ocrText" style="color:var(--text-1);">{cleaned_ocr_text}</pre>
         <div class="button-row">
             <button class="ocr-button" onclick="copyToClipboard()">Copy Text</button>
-            <a href="data:text/plain;charset=utf-8,{base64.b64encode(ocr_text.encode()).decode()}" download="extracted_text.txt" class="ocr-button">Download .txt</a>
+            <a href="data:text/plain;charset=utf-8,{base64.b64encode(cleaned_ocr_text.encode()).decode()}" download="extracted_text.txt" class="ocr-button">Download .txt</a>
         </div>
     </div>
     <script>
@@ -416,8 +434,6 @@ def run_ocr_and_classify(image):
         }}
     </script>
     """, unsafe_allow_html=True)
-    
-    status_text.markdown('<h4 id="predStatus" style="color:var(--text-1);">Done!</h4>', unsafe_allow_html=True)
 
 # --- Streamlit UI Components ---
 

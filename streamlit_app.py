@@ -4,13 +4,12 @@ from PIL import Image, ImageOps
 from io import BytesIO
 import re
 import time
-import numpy as np
 import base64
 
 # Set Streamlit to use a wide layout and a custom title.
 st.set_page_config(layout="wide", page_title="OCR-TECH", initial_sidebar_state="collapsed")
 
-# --- Custom CSS and HTML from ocr skeleton.html ---
+# --- Custom CSS and HTML ---
 st.markdown("""
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
@@ -19,10 +18,10 @@ st.markdown("""
     --bg-1: #ffffff;
     --bg-2: #fff5eb;
     --bg-3: #ffe7cc;
-    --card-bg: rgba(255, 255, 255, 0.5); /* Made more transparent for a glass effect */
+    --card-bg: rgba(255, 255, 255, 0.5); /* More transparent for glass effect */
     --card-border: rgba(255, 255, 255, 0.6);
     --card-shadow: 0 18px 44px rgba(0, 0, 0, 0.28);
-    --text-1: #1f1f1f;
+    --text-1: #1f1f1f; /* Dark text for readability on light background */
     --text-2: #5a5a5a;
     --brand: #ff7a18;
     --brand-2: #ff4d00;
@@ -90,20 +89,6 @@ st.markdown("""
     text-align: center;
     padding-bottom: 2rem;
     border-bottom: 1px dashed var(--muted);
-  }
-  
-  .file-input-label {
-    background-color: var(--brand);
-    color: var(--bg-1);
-    padding: 1rem 2rem;
-    border-radius: var(--radius-lg);
-    cursor: pointer;
-    font-weight: 600;
-    transition: background-color 0.3s ease;
-  }
-  
-  .file-input-label:hover {
-    background-color: var(--brand-2);
   }
   
   .results-grid {
@@ -195,23 +180,24 @@ st.markdown("""
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
   }
   
-  /* Hiding the default Streamlit file uploader button to replace with custom one */
-  .stFileUploader > div > button {
-    display: none;
+  /* Style for the Streamlit file uploader to match custom design */
+  .st-emotion-cache-1c7y31u {
+      border: 2px dashed var(--muted);
+      border-radius: var(--radius-lg);
+      padding: 2rem;
+      text-align: center;
+      cursor: pointer;
+      background: rgba(255, 255, 255, 0.2);
+      transition: background 0.3s ease;
+  }
+  .st-emotion-cache-1c7y31u:hover {
+      background: rgba(255, 255, 255, 0.3);
   }
 
-  /* Style the file uploader's drag-and-drop zone */
-  .stFileUploader > div > div > div {
-    border: 2px dashed var(--muted);
-    border-radius: var(--radius-lg);
-    padding: 2rem;
-    text-align: center;
-    cursor: pointer;
-    background: rgba(255, 255, 255, 0.2);
-    transition: background 0.3s ease;
-  }
-  .stFileUploader > div > div > div:hover {
-      background: rgba(255, 255, 255, 0.3);
+  /* Style for the file uploader's text to ensure visibility */
+  .st-emotion-cache-1c7y31u div p {
+      color: var(--text-1);
+      font-weight: 500;
   }
 </style>
 """, unsafe_allow_html=True)
@@ -254,36 +240,34 @@ def classify_document(text):
     text = text.lower()
     
     # Enhanced keyword-based classification
-    if "invoice" in text or "bill to" in text or "invoice number" in text:
-        return "Invoice", 98
-    if "receipt" in text or "thank you for your purchase" in text:
-        return "Receipt", 97
-    if "report" in text or "summary" in text or "analysis" in text:
-        return "Report", 95
-    if "contract" in text or "agreement" in text or "terms and conditions" in text:
-        return "Contract", 96
-    if "memorandum" in text or "memo" in text or "interoffice" in text:
-        return "Memorandum", 94
-    if "agenda" in text or "meeting" in text or "minutes" in text:
-        return "Agenda", 93
-    if "prescription" in text or "rx" in text or "refill" in text:
-        return "Medical Document", 92
+    keywords = {
+        "invoice": ["invoice", "bill to", "invoice number", "tax", "payment due", "amount due"],
+        "receipt": ["receipt", "thank you for your purchase", "total", "subtotal", "cashier"],
+        "report": ["report", "summary", "analysis", "findings", "conclusion"],
+        "contract": ["contract", "agreement", "terms and conditions", "effective date", "parties"],
+        "memorandum": ["memorandum", "memo", "interoffice"],
+        "agenda": ["agenda", "meeting", "minutes", "discussion points"],
+        "medical document": ["prescription", "rx", "refill", "patient", "diagnosis", "doctor", "hospital"],
+        "resume": ["resume", "curriculum vitae", "experience", "education", "skills"],
+        "legal document": ["affidavit", "will", "deed", "court", "judgment"],
+        "financial statement": ["balance sheet", "income statement", "cash flow", "statement of changes"],
+    }
+    
+    best_match = "Miscellaneous"
+    max_score = 0
+    
+    for doc_type, terms in keywords.items():
+        score = sum(1 for term in terms if term in text)
+        if score > max_score:
+            max_score = score
+            best_match = doc_type
 
-    # Pattern-based classification
-    letter_pattern = r"(dear|sincerely|best regards|regards|from:|to:|date:|re:|subject:|yours sincerely|yours faithfully|attachment:)"
-    if re.search(letter_pattern, text):
-        return "Letter", 90
-
-    # Heuristic-based classification
+    # Dynamic confidence based on keyword matches and document length
     word_count = len(text.split())
-    line_count = len(text.split('\n'))
+    confidence_score = 75 + (max_score * 5) + (10 if word_count > 100 else 0)
+    confidence_score = min(confidence_score, 99) # Cap at 99 for realism
     
-    if word_count > 250 and line_count > 20:
-        return "Document", 88
-    if word_count < 50 and line_count < 5:
-        return "Screenshot/Short Text", 80
-    
-    return "Miscellaneous", 75
+    return best_match.capitalize(), confidence_score
 
 
 def run_ocr_and_classify(image):
@@ -362,14 +346,27 @@ def run_ocr_and_classify(image):
         <pre id="ocrText" style="color:var(--text-1);">{ocr_text}</pre>
         <div class="button-row">
             <button class="ocr-button" onclick="copyToClipboard()">Copy Text</button>
-            <a href="data:text/plain;charset=utf-8,{base64.b64encode(ocr_text.encode()).decode()}" download="extracted_text.txt" class="ocr-button" style="text-decoration: none; color: white;">Download .txt</a>
+            <a href="data:text/plain;charset=utf-8,{base64.b64encode(ocr_text.encode()).decode()}" download="extracted_text.txt" class="ocr-button">Download .txt</a>
         </div>
     </div>
     <script>
         function copyToClipboard() {{
             const textToCopy = document.getElementById('ocrText').innerText;
             navigator.clipboard.writeText(textToCopy).then(() => {{
-                alert('Text copied to clipboard!');
+                // Replace with Streamlit toast for better UX
+                var toastMessage = "Text copied!";
+                var streamlitContainer = window.parent.document.querySelector('.st-toast');
+                if (streamlitContainer) {{
+                    var toastDiv = document.createElement('div');
+                    toastDiv.className = 'st-toast';
+                    toastDiv.innerHTML = '<div style="background-color: #f0f2f6; padding: 10px; border-radius: 5px;">' + toastMessage + '</div>';
+                    streamlitContainer.appendChild(toastDiv);
+                    setTimeout(() => {{
+                        toastDiv.remove();
+                    }}, 3000);
+                }} else {{
+                    console.log(toastMessage);
+                }}
             }}).catch(err => {{
                 console.error('Could not copy text: ', err);
             }});
@@ -404,16 +401,22 @@ with st.container():
         <div class="file-upload-section">
             <h4 style="color:var(--text-1);">Upload an Image</h4>
             <p style="color:var(--text-2);">Drag and drop a file here or click below to choose a file.</p>
-            <div class="file-input-label-container">
-                <label for="fileInput" class="file-input-label">Choose File</label>
-            </div>
         </div>
     </div>
     """, unsafe_allow_html=True)
     
     uploaded_file = st.file_uploader("", type=["png", "jpg", "jpeg"], key="file_uploader", label_visibility="collapsed")
     
-    if uploaded_file and not st.session_state.uploaded_image:
+# Logic to handle file upload and state management
+if uploaded_file:
+    # Check if a new file has been uploaded
+    if 'last_uploaded_filename' not in st.session_state or st.session_state.last_uploaded_filename != uploaded_file.name:
+        st.session_state.last_uploaded_filename = uploaded_file.name
+        
+        # Reset state for new processing
+        st.session_state.uploaded_image = None
+        st.session_state.processing = False
+        
         try:
             image_data = uploaded_file.getvalue()
             _ = Image.open(BytesIO(image_data))
@@ -423,7 +426,7 @@ with st.container():
             st.error("Error: The file you uploaded could not be identified as a valid image. Please try a different file.")
             st.session_state.uploaded_image = None
 
-# Automatically run the process if an image is uploaded
+# Automatically run the process if an image is uploaded and not already processing
 if st.session_state.uploaded_image and not st.session_state.processing:
     st.session_state.processing = True
     image_to_process = Image.open(BytesIO(st.session_state.uploaded_image))

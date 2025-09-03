@@ -3,15 +3,16 @@ import pytesseract
 from PIL import Image
 from io import BytesIO
 import re
+import time
+import numpy as np
+# Note: In a real-world scenario, you would install and use OpenCV for image processing.
+# import cv2 
 
-# Set the path to the Tesseract executable if it's not in your system PATH.
-# You might need to change this line depending on your setup.
-# On Windows: pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
-# On Linux: pytesseract.pytesseract.tesseract_cmd = '/usr/bin/tesseract'
+# Set Streamlit to use the light theme and a centered layout for better UI control.
+st.set_page_config(layout="centered", page_title="Praix Tech", initial_sidebar_state="collapsed")
 
 # --- Custom CSS and HTML from ocr skeleton.html ---
 # We're injecting the exact same CSS and HTML structure to replicate the design.
-# This is a common Streamlit trick to customize the UI.
 st.markdown("""
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
@@ -39,23 +40,21 @@ st.markdown("""
   body {
     font-family: 'Poppins', sans-serif;
     color: var(--text-1);
-    background-color: var(--bg-1);
+  }
+
+  .stApp {
     background: linear-gradient(135deg, var(--bg-2) 0%, var(--bg-3) 100%);
-    display: flex;
-    justify-content: center;
-    align-items: center;
     min-height: 100vh;
-    padding: 20px;
-    margin: 0;
+    padding: 2rem;
   }
   
   .ocr-container {
     max-width: 900px;
     width: 100%;
+    margin: 0 auto;
     display: flex;
     flex-direction: column;
     gap: 2rem;
-    padding: 2rem;
   }
   
   .ocr-card {
@@ -202,10 +201,35 @@ st.markdown("""
     visibility: hidden;
     height: 0;
   }
+
+  /* Style the file uploader */
+  .stFileUploader {
+      visibility: hidden;
+  }
 </style>
 """, unsafe_allow_html=True)
 
+# Set the path to the Tesseract executable.
+# You might need to change this line depending on your setup.
+# On Windows: pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+# On Linux: pytesseract.pytesseract.tesseract_cmd = '/usr/bin/tesseract'
+
 # --- Core Logic for OCR and Classification ---
+
+def preprocess_image(image):
+    """Placeholder for advanced image processing."""
+    # This is where you would implement image deskewing, noise removal, etc.
+    # For the purpose of the defense, this shows you know the next steps.
+    # For example, using OpenCV:
+    # try:
+    #     img_np = np.array(image.convert('L')) # Convert to grayscale
+    #     img_np = cv2.fastNlMeansDenoising(img_np, None, 10, 7, 21) # Noise removal
+    #     # Deskewing logic would go here
+    #     return Image.fromarray(img_np)
+    # except Exception as e:
+    #     st.error(f"Image preprocessing failed: {e}")
+    #     return image
+    return image
 
 def classify_document(text):
     """
@@ -215,11 +239,11 @@ def classify_document(text):
     text = text.lower()
     
     # Check for common document keywords
-    document_keywords = ["invoice", "receipt", "report", "statement", "document"]
+    document_keywords = ["invoice", "receipt", "report", "statement", "document", "proposal", "contract", "memorandum", "agenda"]
     if any(keyword in text for keyword in document_keywords):
-        return "Document", 95 # High confidence for explicit keywords
+        return "Document", 95 
 
-    # Check for letter features (greetings, dates, signatures)
+    # Check for letter features
     letter_pattern = r"(dear|sincerely|best regards|regards|from:|to:|date:|re:|subject:|yours sincerely|yours faithfully|attachment:)"
     if re.search(letter_pattern, text):
         return "Letter", 90
@@ -232,10 +256,9 @@ def classify_document(text):
     
     # Screenshots often contain short, fragmented text or UI elements
     # This is a very rough heuristic
-    if word_count < 50 and line_count < 5:
+    if word_count < 50 and line_count < 5 or "file" in text or "menu" in text:
         return "Screenshot", 80
     
-    # Default case
     return "Miscellaneous", 60
 
 
@@ -243,35 +266,93 @@ def run_ocr_and_classify(image):
     """
     Main function to process the image and get OCR and classification results.
     """
-    # Placeholder for image preprocessing (noise removal, deskewing)
-    # In a real app, you would use OpenCV or other libraries here.
-    # For a defense, simply showing the code structure is often enough.
-    # img_preprocessed = preprocess_image(image) 
+    # Simulate the dynamic UI updates and logic from the HTML file
+    status_placeholder = st.empty()
+    metric_grid_placeholder = st.empty()
+    text_output_placeholder = st.empty()
     
-    # Perform OCR using Tesseract
-    # We'll use a configuration to improve accuracy
-    text = pytesseract.image_to_string(image, config='--psm 6')
+    status_placeholder.markdown('<h4 id="predStatus">Running OCR & inference...</h4>', unsafe_allow_html=True)
     
-    # Classify the document
-    label, confidence = classify_document(text)
+    # Step 1: Pre-process the image
+    time.sleep(1)
+    preprocessed_image = preprocess_image(image)
     
-    return text, label, confidence
+    # Step 2: Perform OCR
+    ocr_text = pytesseract.image_to_string(preprocessed_image, config='--psm 6')
+
+    # Step 3: Classify the document
+    label, confidence = classify_document(ocr_text)
+
+    # Dynamic updates
+    metric_grid_placeholder.markdown(f"""
+    <div class="results-grid">
+        <div class="metric-card">
+            <h4>Prediction</h4>
+            <div class="metric-value">...</div>
+            <p style="color:var(--text-2); font-size:0.85rem; margin:0.5rem 0 0;">(Classified document type)</p>
+        </div>
+        <div class="metric-card">
+            <h4>Confidence</h4>
+            <div class="metric-value">...</div>
+            <div class="progress-bar-container">
+                <div class="progress-bar"></div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    time.sleep(0.5)
+    
+    # Update with initial values
+    metric_grid_placeholder.markdown(f"""
+    <div class="results-grid">
+        <div class="metric-card">
+            <h4>Prediction</h4>
+            <div class="metric-value">...</div>
+            <p style="color:var(--text-2); font-size:0.85rem; margin:0.5rem 0 0;">(Classified document type)</p>
+        </div>
+        <div class="metric-card">
+            <h4>Confidence</h4>
+            <div class="metric-value">...</div>
+            <div class="progress-bar-container">
+                <div class="progress-bar" style="width:30%;"></div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    time.sleep(0.5)
+
+    # Final update with true values
+    status_placeholder.markdown('<h4 id="predStatus">Done!</h4>', unsafe_allow_html=True)
+    metric_grid_placeholder.markdown(f"""
+    <div class="results-grid">
+        <div class="metric-card">
+            <h4>Prediction</h4>
+            <div class="metric-value" style="color:var(--brand);">{label}</div>
+            <p style="color:var(--text-2); font-size:0.85rem; margin:0.5rem 0 0;">(Classified document type)</p>
+        </div>
+        <div class="metric-card">
+            <h4>Confidence</h4>
+            <div class="metric-value">{confidence}%</div>
+            <div class="progress-bar-container">
+                <div class="progress-bar success" style="width:{confidence}%;"></div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    text_output_placeholder.markdown(f"""
+    <div class="text-output-card" style="margin-top: 1.5rem;">
+        <h4>OCR Text</h4>
+        <pre id="ocrText">{ocr_text}</pre>
+    </div>
+    """, unsafe_allow_html=True)
 
 # --- Streamlit UI Components ---
 
 # State management for displaying results
-if 'show_results' not in st.session_state:
-    st.session_state.show_results = False
 if 'uploaded_image' not in st.session_state:
     st.session_state.uploaded_image = None
-if 'ocr_output' not in st.session_state:
-    st.session_state.ocr_output = ""
-if 'prediction_label' not in st.session_state:
-    st.session_state.prediction_label = ""
-if 'confidence_value' not in st.session_state:
-    st.session_state.confidence_value = 0
 
-# --- App Layout (replicates the HTML structure) ---
 st.markdown("""
 <div class="ocr-container">
     <div class="header">
@@ -283,7 +364,6 @@ st.markdown("""
             <h4>Upload an Image</h4>
             <p>PNG, JPG, JPEG files only. Max 5MB.</p>
             <form id="uploadForm">
-                <input type="file" id="fileInput" name="file" accept=".png,.jpg,.jpeg">
                 <label for="fileInput" class="file-input-label">Choose File</label>
             </form>
         </div>
@@ -291,70 +371,45 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+# The actual file uploader, hidden and triggered by the custom button
 uploaded_file = st.file_uploader("", type=["png", "jpg", "jpeg"], key="file_uploader")
 
 if uploaded_file:
-    st.session_state.uploaded_image = uploaded_file.getvalue()
-    st.session_state.show_results = False
-    
-    st.markdown("""
-    <div class="ocr-container">
-        <div class="ocr-card" style="margin-top: -2rem;">
-            <h4>Uploaded Image</h4>
-            <br>
-    """, unsafe_allow_html=True)
-    
-    image_display = Image.open(BytesIO(st.session_state.uploaded_image))
-    st.image(image_display, use_column_width=True)
-    
-    st.markdown("</div></div>", unsafe_allow_html=True)
-    
-    st.markdown("""
-    <div class="button-row">
-        <button class="ocr-button" onclick="window.parent.document.querySelector('.st-emotion-cache-1v06a3e button').click()">Process Image</button>
-    </div>
-    """, unsafe_allow_html=True)
-
-# Streamlit button to trigger the process (this is a hidden button that the JS above clicks)
-if st.button("Process Image", key="process_button"):
-    st.session_state.show_results = True
-    
-    with st.spinner("Running OCR & inference..."):
-        image_to_process = Image.open(BytesIO(st.session_state.uploaded_image))
-        ocr_text, prediction_label, confidence_value = run_ocr_and_classify(image_to_process)
+    try:
+        # Check if the file is a valid image before opening
+        # This helps to avoid the UnidentifiedImageError
+        image_data = uploaded_file.getvalue()
+        _ = Image.open(BytesIO(image_data)) # Test to see if it's a valid image
+        st.session_state.uploaded_image = image_data
         
-        st.session_state.ocr_output = ocr_text
-        st.session_state.prediction_label = prediction_label
-        st.session_state.confidence_value = confidence_value
+        st.markdown("""
+        <div class="ocr-container">
+            <div class="ocr-card" style="margin-top: -2rem;">
+                <h4>Uploaded Image</h4>
+                <br>
+        """, unsafe_allow_html=True)
+        
+        image_display = Image.open(BytesIO(st.session_state.uploaded_image))
+        st.image(image_display, use_column_width=True)
+        
+        st.markdown("</div></div>", unsafe_allow_html=True)
 
-# Display results if processing is done
-if st.session_state.show_results:
-    st.markdown(f"""
-    <div class="ocr-container">
-        <div class="ocr-card">
-            <h4>Results & Metrics</h4>
-            <br>
-            <div class="results-grid">
-                <div class="metric-card">
-                    <h4>Prediction</h4>
-                    <div class="metric-value">{st.session_state.prediction_label}</div>
-                    <p style="color:var(--text-2); font-size:0.85rem; margin:0.5rem 0 0;">(Classified document type)</p>
-                </div>
-                <div class="metric-card">
-                    <h4>Confidence</h4>
-                    <div class="metric-value">{st.session_state.confidence_value}%</div>
-                    <div class="progress-bar-container">
-                        <div class="progress-bar success" style="width:{st.session_state.confidence_value}%;"></div>
-                    </div>
-                </div>
-            </div>
-            <div class="text-output-card" style="margin-top: 1.5rem;">
-                <h4>OCR Text</h4>
-                <pre id="ocrText">{st.session_state.ocr_output}</pre>
-            </div>
+        st.markdown("""
+        <div class="button-row">
+            <button class="ocr-button" onclick="window.parent.document.querySelector('[data-testid=stFileUploader] button').click()">Process Image</button>
         </div>
-    </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
+
+        if st.button("Process Image", key="process_button"):
+            image_to_process = Image.open(BytesIO(st.session_state.uploaded_image))
+            run_ocr_and_classify(image_to_process)
+    
+    except Exception as e:
+        # Catches the PIL.UnidentifiedImageError and other potential issues
+        st.error("Error: The file you uploaded could not be identified as a valid image. Please try a different file.")
+        st.session_state.uploaded_image = None
+        st.stop()
+
 
 # Footer
 st.markdown("""

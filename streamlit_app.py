@@ -174,6 +174,10 @@ st.markdown("""
     transition: all 0.2s ease;
   }
   
+  .ocr-button, a.ocr-button {
+    text-decoration: none; /* Removed underline */
+  }
+
   .ocr-button:hover {
     background-color: var(--brand-2);
     transform: translateY(-2px);
@@ -199,6 +203,40 @@ st.markdown("""
       color: var(--text-1);
       font-weight: 500;
   }
+  
+  /* Animation for image preview */
+  .image-preview-container {
+    position: relative;
+    overflow: hidden;
+    border-radius: var(--radius-md);
+  }
+
+  .image-preview-container::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+      -45deg,
+      rgba(255, 255, 255, 0.1) 25%,
+      rgba(255, 255, 255, 0.6) 50%,
+      rgba(255, 255, 255, 0.1) 75%
+    );
+    background-size: 400% 400%;
+    animation: pulse-stream 3s ease-in-out infinite;
+  }
+  
+  @keyframes pulse-stream {
+    0% {
+      background-position: 100% 50%;
+    }
+    100% {
+      background-position: 0% 50%;
+    }
+  }
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -241,23 +279,27 @@ def classify_document(text):
     
     # Enhanced keyword-based classification
     keywords = {
-        "invoice": ["invoice", "bill to", "invoice number", "tax", "payment due", "amount due"],
-        "receipt": ["receipt", "thank you for your purchase", "total", "subtotal", "cashier"],
-        "report": ["report", "summary", "analysis", "findings", "conclusion"],
-        "contract": ["contract", "agreement", "terms and conditions", "effective date", "parties"],
-        "memorandum": ["memorandum", "memo", "interoffice"],
-        "agenda": ["agenda", "meeting", "minutes", "discussion points"],
-        "medical document": ["prescription", "rx", "refill", "patient", "diagnosis", "doctor", "hospital"],
-        "resume": ["resume", "curriculum vitae", "experience", "education", "skills"],
-        "legal document": ["affidavit", "will", "deed", "court", "judgment"],
-        "financial statement": ["balance sheet", "income statement", "cash flow", "statement of changes"],
+        "invoice": ["invoice", "bill to", "invoice number", "tax", "payment due", "amount due", r"invoice\s*#", r"bill\s*date"],
+        "receipt": ["receipt", "thank you for your purchase", "total", "subtotal", "cashier", r"total\s*usd", r"transaction\s*id"],
+        "report": ["report", "summary", "analysis", "findings", "conclusion", "abstract", "introduction", "methodology"],
+        "contract": ["contract", "agreement", "terms and conditions", "effective date", "parties", "herein", "whereas"],
+        "memorandum": ["memorandum", "memo", "interoffice", "to:", "from:", "date:", "subject:"],
+        "agenda": ["agenda", "meeting", "minutes", "discussion points", r"time:\s*\d{1,2}:\d{2}", r"location:\s*"],
+        "medical document": ["prescription", "rx", "refill", "patient", "diagnosis", "doctor", "hospital", "medical record"],
+        "resume": ["resume", "curriculum vitae", "experience", "education", "skills", "objective", "work history"],
+        "legal document": ["affidavit", "will", "deed", "court", "judgment", "plaintiff", "defendant", "statute"],
+        "financial statement": ["balance sheet", "income statement", "cash flow", "statement of changes", "assets", "liabilities"],
     }
     
     best_match = "Miscellaneous"
     max_score = 0
     
     for doc_type, terms in keywords.items():
-        score = sum(1 for term in terms if term in text)
+        score = 0
+        for term in terms:
+            if re.search(term, text):
+                score += 1
+        
         if score > max_score:
             max_score = score
             best_match = doc_type
@@ -285,7 +327,11 @@ def run_ocr_and_classify(image):
     # Step 1: Pre-process the image
     original_col, processed_col = st.columns(2)
     with original_col:
+        # Added a class for the animation container
+        st.markdown('<div class="image-preview-container">', unsafe_allow_html=True)
         st.image(image, caption="Original Image", use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+        
     with processed_col:
         processed_image_placeholder = st.empty()
         processed_image = preprocess_image(image, processed_image_placeholder, status_text)

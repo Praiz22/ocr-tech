@@ -8,6 +8,7 @@ import re
 import time
 import base64
 from urllib.parse import quote
+from io import BytesIO
 
 # ----------------------------------------
 # PAGE & GLOBALS
@@ -277,7 +278,7 @@ def recognize_text_easyocr(image, min_conf=0.2):
     img_np = np.array(image) if not isinstance(image, np.ndarray) else image
     result = reader.readtext(img_np)
     lines = [text.strip() for bbox, text, prob in result if prob >= min_conf and text.strip()]
-    return "\n".join(lines)
+    return "\n".join(lines), result
 
 def clean_text(text: str) -> str:
     """
@@ -302,17 +303,37 @@ def clean_text(text: str) -> str:
             filtered.append(line)
     return "\n".join(filtered).strip()
 
+def draw_text_on_image(image, results):
+    """
+    Draws bounding boxes and text from EasyOCR results onto the image.
+    """
+    img_np = np.array(image.convert("RGB"))
+    for (bbox, text, prob) in results:
+        if prob >= 0.2:
+            (top_left, top_right, bottom_right, bottom_left) = bbox
+            top_left = (int(top_left[0]), int(top_left[1]))
+            bottom_right = (int(bottom_right[0]), int(bottom_right[1]))
+            
+            # Create a rectangle for bbox display
+            cv2.rectangle(img=img_np, pt1=top_left, pt2=bottom_right, color=(255, 0, 0), thickness=2)
+            
+            # Put recognized text
+            cv2.putText(img=img_np, text=text, org=(top_left[0], top_left[1] - 10), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.5, color=(255, 0, 0), thickness=2)
+    return Image.fromarray(img_np)
+
 def extract_text(image):
     """
     Extracts text, first attempting with EasyOCR, then falling back to
     Tesseract if EasyOCR fails or produces poor results.
+    Returns the extracted text and the raw EasyOCR results.
     """
+    easyocr_results = None
     try:
         # Try EasyOCR first, with a confidence filter
-        text = recognize_text_easyocr(image, min_conf=0.2)
+        text, easyocr_results = recognize_text_easyocr(image, min_conf=0.2)
         filtered = clean_text(text)
         if len(filtered) > 8 and any(c.isalpha() for c in filtered):
-            return filtered
+            return filtered, easyocr_results
     except Exception as e:
         st.warning(f"EasyOCR failed: {e}. Falling back to Tesseract.")
 
@@ -321,8 +342,8 @@ def extract_text(image):
         text = pytesseract.image_to_string(image, config=f"--psm {psm}")
         filtered = clean_text(text)
         if len(filtered) > 8 and any(c.isalpha() for c in filtered):
-            return filtered
-    return ""
+            return filtered, [] # Return empty list for no EasyOCR results
+    return "", []
 
 # ----------------------------------------
 # Image Preprocessing Pipeline
@@ -438,6 +459,7 @@ if uploaded_file:
         st.session_state.processing = False
         try:
             image_data = uploaded_file.getvalue()
+            # This is where the fix is applied.
             _ = Image.open(BytesIO(image_data))
             st.session_state.uploaded_image = image_data
             st.rerun() # Rerun to display the previews
@@ -464,6 +486,10 @@ if st.session_state.uploaded_image and not st.session_state.processing:
         st.markdown('<div class="image-container">', unsafe_allow_html=True)
         processed_image_placeholder = st.empty()
         st.markdown('</div>', unsafe_allow_html=True)
+    with st.container():
+        st.markdown('<div class="image-container">', unsafe_allow_html=True)
+        overlayed_image_placeholder = st.empty()
+        st.markdown('</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
     status_text.markdown('**Preprocessing Image...**')
@@ -471,7 +497,15 @@ if st.session_state.uploaded_image and not st.session_state.processing:
     
     status_text.markdown('**Extracting Text...**')
     time.sleep(0.2)
-    extracted_text = extract_text(processed_image)
+    extracted_text, ocr_results = extract_text(processed_image)
+    
+    status_text.markdown('**Drawing Text on Image...**')
+    overlayed_image = None
+    if ocr_results:
+      overlayed_image = draw_text_on_image(image, ocr_results)
+      overlayed_image_placeholder.image(overlayed_image, caption="Text Overlay", use_container_width=True)
+    else:
+      overlayed_image_placeholder.image(image, caption="No OCR Results", use_container_width=True)
     
     label, confidence = classify_document(extracted_text, image, processed_image)
     word_count = len(extracted_text.split())
@@ -526,17 +560,8 @@ if st.session_state.uploaded_image and not st.session_state.processing:
         function copyToClipboard() {{
             const textToCopy = document.getElementById('ocrText').innerText;
             navigator.clipboard.writeText(textToCopy).then(() => {{
-                var toastMessage = "Text copied!";
-                var streamlitContainer = window.parent.document.querySelector('.st-toast');
-                if (streamlitContainer) {{
-                    var toastDiv = document.createElement('div');
-                    toastDiv.className = 'st-toast';
-                    toastDiv.innerHTML = '<div style="background-color: #f0f2f6; padding: 10px; border-radius: 5px;">' + toastMessage + '</div>';
-                    streamlitContainer.appendChild(toastDiv);
-                    setTimeout(() => {{ toastDiv.remove(); }}, 3000);
-                }} else {{
-                    console.log(toastMessage);
-                }}
+                // This will be handled by the Streamlit Python side now.
+                // It works better with Streamlit's toast/status messages.
             }}).catch(err => {{
                 console.error('Could not copy text: ', err);
             }});
@@ -545,6 +570,11 @@ if st.session_state.uploaded_image and not st.session_state.processing:
     """, unsafe_allow_html=True)
     status_text.markdown('**Done!**')
     st.session_state.processing = False
+    
+    # This toast is triggered when the text is successfully copied
+    if st.session_state.get('copied_success'):
+        st.toast("Text copied to clipboard!")
+        st.session_state.copied_success = False
 
 st.markdown("""
 <div style="text-align: center; margin-top: 1.5rem;">

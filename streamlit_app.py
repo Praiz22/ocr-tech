@@ -27,9 +27,9 @@ st.markdown("""
     --bg-3: #ffe7cc;
     --card-bg: rgba(255, 255, 255, 0.1); /* VERY transparent */
     --card-border: rgba(255, 255, 255, 0.2); /* VERY transparent */
-    --card-shadow: 0 5px 15px rgba(0, 0, 0, 0.08); /* Much reduced shadow */
+    --card-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
     --text-1: #1f1f1f; /* Darkest text */
-    --text-2: #5a5a5a; /* Slightly lighter dark text */
+    --text-2: #333333; /* Slightly lighter dark text */
     --brand: #ff7a18;
     --brand-2: #ff4d00;
     --muted: #e9e9e9;

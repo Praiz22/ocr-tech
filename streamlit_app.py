@@ -103,15 +103,18 @@ st.markdown("""
   .image-row {
     display: flex;
     flex-direction: row;
-    gap: 1.2rem;
+    gap: 1rem; /* Reduced gap */
     justify-content: center;
     align-items: flex-start;
+    flex-wrap: wrap; /* Allow wrapping on small screens */
   }
   
   .image-container {
     width: 100%;
-    max-width: 240px;
-    max-height: 260px;
+    flex: 1 1 250px; /* New fluid sizing for three images side-by-side */
+    max-width: 300px; /* Optional, but helps maintain aspect ratio on very large screens */
+    height: 100%; /* Height is fluid with width */
+    max-height: 250px;
     overflow: hidden;
     border-radius: 10px;
     background: rgba(255, 255, 255, 0.13);
@@ -120,6 +123,13 @@ st.markdown("""
     align-items: center;
     justify-content: center;
     position: relative;
+  }
+
+  /* Make st.image inside the container fluid */
+  .image-container img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain; /* Scale image to fit container */
   }
   
   .image-preview-container.processing::before {
@@ -346,7 +356,7 @@ def extract_text(image):
     return "", []
 
 # ----------------------------------------
-# Image Preprocessing Pipeline
+# Image Preprocessing Pipeline (Enhanced)
 # ----------------------------------------
 def preprocess_image(img, processed_placeholder, status_placeholder):
     """
@@ -365,20 +375,21 @@ def preprocess_image(img, processed_placeholder, status_placeholder):
     enhancer = ImageEnhance.Contrast(gray)
     enhanced = enhancer.enhance(2.0)
     processed_placeholder.image(enhanced, caption="Contrast Enhanced", use_container_width=True)
-
-    status_placeholder.markdown('**Binarizing...**')
-    time.sleep(0.1)
-    # Binarize the image using a simple threshold
-    arr = np.array(enhanced)
-    mean = arr.mean()
-    binarized = (arr > mean - 10).astype(np.uint8) * 255
-    bin_img = Image.fromarray(binarized)
-    processed_placeholder.image(bin_img, caption="Binarized", use_container_width=True)
     
-    status_placeholder.markdown('**Denoising...**')
+    status_placeholder.markdown('**Binarizing (Otsu)...**')
     time.sleep(0.1)
-    # Apply a median filter to remove noise
-    denoised = bin_img.filter(ImageFilter.MedianFilter(size=3))
+    # Binarize the image using Otsu's thresholding for better results
+    arr = np.array(enhanced)
+    _, binarized = cv2.threshold(arr, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    bin_img = Image.fromarray(binarized)
+    processed_placeholder.image(bin_img, caption="Binarized (Otsu)", use_container_width=True)
+    
+    status_placeholder.markdown('**Denoising (Morphological)...**')
+    time.sleep(0.1)
+    # Apply morphological open to remove noise
+    kernel = np.ones((1, 1), np.uint8)
+    denoised_np = cv2.morphologyEx(binarized, cv2.MORPH_OPEN, kernel)
+    denoised = Image.fromarray(denoised_np)
     processed_placeholder.image(denoised, caption="Denoised", use_container_width=True)
     
     return denoised
@@ -386,27 +397,59 @@ def preprocess_image(img, processed_placeholder, status_placeholder):
 # ----------------------------------------
 # Utilities (metrics, classification)
 # ----------------------------------------
-def classify_document(text, img, processed_img):
+def classify_document(text, img, processed_img, ocr_results):
     """
     Classifies the image based on extracted text and image properties.
+    The logic is more comprehensive now.
     """
     words = text.split()
     real_words = [w for w in words if len(w) > 2 and re.match(r"[a-zA-Z]", w)]
-    arr = np.array(img.convert("L"))
-    avg_brightness = arr.mean()
     
-    # Classify as "Picture" if very little text is found
-    if len(words) < 4 or len(real_words) < 2 or avg_brightness > 240 or avg_brightness < 15:
-        return "Picture", 99
+    # Heuristics based on text properties
+    word_count = len(words)
+    line_count = len(text.splitlines())
+    char_count = len(text.replace(" ", "").replace("\n", ""))
+    
+    # Heuristics based on image properties
+    img_width, img_height = img.size
+    aspect_ratio = max(img_width, img_height) / min(img_width, img_height) if min(img_width, img_height) > 0 else 1
     
     arr_proc = np.array(processed_img.convert("L"))
     std = arr_proc.std()
     
-    # Classify as "Handwritten Note" if the image texture suggests it
-    if std > 55 and std < 95:
-        return "Handwritten Note", 94
+    # Scoring system for classification
+    document_score = 0
+    handwritten_score = 0
+    
+    if word_count > 50 and line_count > 10:
+        document_score += 40
+    if char_count / (img_width * img_height) > 0.005:  # High character density
+        document_score += 20
+    if 1.4 < aspect_ratio < 1.6: # A4 or US letter aspect ratio
+        document_score += 20
+    if std > 55 and std < 95: # Texture characteristic of handwriting
+        handwritten_score += 40
+    
+    # Check for specific keywords
+    keywords = {'invoice', 'receipt', 'report', 'statement', 'bill', 'form'}
+    for word in real_words:
+        if word.lower() in keywords:
+            document_score += 15
+            break
+            
+    # Classify as "Picture" if very little text is found
+    if word_count < 10 or len(real_words) < 5:
+        return "Picture", 99
         
-    return "Document", 92
+    # Final classification based on scores
+    if document_score > handwritten_score:
+        return "Document", min(100, 70 + document_score // 2)
+    elif handwritten_score > document_score:
+        return "Handwritten Note", min(100, 70 + handwritten_score // 2)
+    else:
+        # Default to Document if scores are similar
+        return "Document", min(100, 70 + document_score // 2)
+
 
 def word_frequency(text):
     """Calculates the frequency of each word in the text."""
@@ -470,29 +513,34 @@ if uploaded_file:
 if st.session_state.uploaded_image and not st.session_state.processing:
     st.session_state.processing = True
     image = Image.open(BytesIO(st.session_state.uploaded_image)).convert("RGB")
-    status_text = st.empty()
-    metric_grid_placeholder = st.empty()
-    text_output_placeholder = st.empty()
-
-    st.markdown('<div class="image-row">', unsafe_allow_html=True)
-    with st.container():
+    
+    # Create the columns and placeholders for the images
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
         st.markdown(
             '<div class="image-container">'
             f'<div class="image-preview-container {"processing" if st.session_state.processing else ""}">',
             unsafe_allow_html=True)
         st.image(image, caption="Original", use_container_width=True)
         st.markdown('</div></div>', unsafe_allow_html=True)
-    with st.container():
+    
+    with col2:
         st.markdown('<div class="image-container">', unsafe_allow_html=True)
         processed_image_placeholder = st.empty()
         st.markdown('</div>', unsafe_allow_html=True)
-    with st.container():
+    
+    with col3:
         st.markdown('<div class="image-container">', unsafe_allow_html=True)
         overlayed_image_placeholder = st.empty()
         st.markdown('</div>', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
 
+    status_text = st.empty()
+    metric_grid_placeholder = st.empty()
+    text_output_placeholder = st.empty()
+    
     status_text.markdown('**Preprocessing Image...**')
+    time.sleep(0.1) # Add a small delay to ensure the UI updates
     processed_image = preprocess_image(image, processed_image_placeholder, status_text)
     
     status_text.markdown('**Extracting Text...**')
@@ -507,7 +555,7 @@ if st.session_state.uploaded_image and not st.session_state.processing:
     else:
       overlayed_image_placeholder.image(image, caption="No OCR Results", use_container_width=True)
     
-    label, confidence = classify_document(extracted_text, image, processed_image)
+    label, confidence = classify_document(extracted_text, image, processed_image, ocr_results)
     word_count = len(extracted_text.split())
     char_count = len(extracted_text.replace(" ", "").replace("\n", ""))
     avg_word_length = char_count / word_count if word_count > 0 else 0
@@ -578,6 +626,8 @@ if st.session_state.uploaded_image and not st.session_state.processing:
 
 st.markdown("""
 <div style="text-align: center; margin-top: 1.5rem;">
-    <p style="color:#444; font-size:0.8rem;">OCR-TECH - ADELEKE, OLADOKUN, OLALEYE</p>
+    <p style="color:#444; font-size:0.8rem;">OCR-TECH - ADELEKE, OLADOKUN, OLALEYE</p></br>
+    <a href="https://github.com/Praiz22/ocr-tech"<p style="color:#444; font-size:0.8rem;">Github Repo- praixtech</p></a>
+    
 </div>
 """, unsafe_allow_html=True)

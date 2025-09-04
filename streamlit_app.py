@@ -8,6 +8,13 @@ import re
 import time
 from urllib.parse import quote
 
+# Optional: EasyOCR for better extraction
+try:
+    import easyocr
+    EASY_AVAILABLE = True
+except ImportError:
+    EASY_AVAILABLE = False
+
 # -------------------------------------------------------------------------------------------------
 # Page configuration
 # -------------------------------------------------------------------------------------------------
@@ -61,6 +68,51 @@ body { font-family: 'Poppins', sans-serif; color: var(--text-1);}
 .file-upload-section {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   text-align: center; padding-bottom: 2rem; border-bottom: 1px dashed var(--muted); width: 100%;
+}
+.image-row {
+  display: flex;
+  flex-direction: row;
+  gap: 2.1rem;
+  justify-content: center;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+.image-container {
+  width: 100%;
+  max-width: 410px;
+  max-height: 450px;
+  overflow: hidden;
+  margin: 0 auto;
+  border-radius: 16px;
+  background: rgba(255,255,255,0.10);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.image-preview-container { position: relative; overflow: hidden; border-radius: var(--radius-md);}
+.image-preview-container.processing::before {
+  content: '';
+  position: absolute;
+  left: 0; width: 100%; height: 100%;
+  top: 0;
+  background: repeating-linear-gradient(
+    120deg,
+    rgba(255,255,255,0) 0%,
+    rgba(255,255,255,0.35) 30%,
+    rgba(255,255,255,0.8) 47%,
+    rgba(255,255,255,0.35) 70%,
+    rgba(255,255,255,0) 100%
+  );
+  background-size: 120% 120%;
+  animation: streakDown 1.6s cubic-bezier(.77,0,.18,1) infinite;
+  z-index: 2;
+  pointer-events: none;
+}
+@keyframes streakDown {
+    0% { top: -80%; }
+    100% { top: 120%; }
 }
 .results-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem;}
 .metric-card {
@@ -130,29 +182,6 @@ body { font-family: 'Poppins', sans-serif; color: var(--text-1);}
     background: rgba(255,255,255,0.27);
 }
 .st-emotion-cache-1c7y31u div p { color: var(--text-1); font-weight: 500;}
-.image-preview-container { position: relative; overflow: hidden; border-radius: var(--radius-md);}
-.image-preview-container.processing::before {
-  content: '';
-  position: absolute;
-  left: 0; width: 100%; height: 100%;
-  top: 0;
-  background: repeating-linear-gradient(
-    120deg,
-    rgba(255,255,255,0) 0%,
-    rgba(255,255,255,0.35) 30%,
-    rgba(255,255,255,0.8) 47%,
-    rgba(255,255,255,0.35) 70%,
-    rgba(255,255,255,0) 100%
-  );
-  background-size: 120% 120%;
-  animation: streakDown 1.6s cubic-bezier(.77,0,.18,1) infinite;
-  z-index: 2;
-  pointer-events: none;
-}
-@keyframes streakDown {
-    0% { top: -80%; }
-    100% { top: 120%; }
-}
 </style>
 """, unsafe_allow_html=True)
 
@@ -176,12 +205,23 @@ def clean_text(text: str) -> str:
             filtered.append(line)
     return "\n".join(filtered).strip()
 
-def multi_psm_extract(image: Image.Image) -> str:
-    """Try multiple Tesseract PSMs for best legit text extraction."""
+def extract_text(image: Image.Image) -> str:
+    """Try EasyOCR (if available), then Tesseract with multiple PSMs for best legit text extraction."""
+    # Try EasyOCR
+    if EASY_AVAILABLE:
+        try:
+            reader = easyocr.Reader(['en'], gpu=False)
+            bounds = reader.readtext(np.array(image))
+            text = "\n".join([b[1] for b in bounds if len(b[1].strip()) > 1])
+            filtered = clean_text(text)
+            if len(filtered) > 8 and any(c.isalpha() for c in filtered):
+                return filtered
+        except Exception as e:
+            print(f"EasyOCR failed: {e}")
+    # Fallback to Tesseract
     for psm in [6, 11, 3, 7]:
         text = pytesseract.image_to_string(image, config=f"--psm {psm}")
         filtered = clean_text(text)
-        # Only return if legit text present
         if len(filtered) > 8 and any(c.isalpha() for c in filtered):
             return filtered
     return ""
@@ -313,23 +353,37 @@ if st.session_state.uploaded_image and not st.session_state.processing:
     status_text = st.empty()
     metric_grid_placeholder = st.empty()
     text_output_placeholder = st.empty()
-    original_col, processed_col = st.columns(2)
-    with original_col:
-        st.markdown(f'<div class="image-preview-container {"processing" if st.session_state.processing else ""}">', unsafe_allow_html=True)
+
+    # ---------- IMAGE PREVIEWS IN FIXED CONTAINERS -----------------
+    st.markdown('<div class="image-row">', unsafe_allow_html=True)
+    with st.container():
+        # Original preview with animation during processing
+        st.markdown(
+            '<div class="image-container">'
+            f'<div class="image-preview-container {"processing" if st.session_state.processing else ""}">',
+            unsafe_allow_html=True)
         st.image(image, caption="Original Image", use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-    with processed_col:
+        st.markdown('</div></div>', unsafe_allow_html=True)
+
+    with st.container():
+        st.markdown('<div class="image-container">', unsafe_allow_html=True)
         processed_image_placeholder = st.empty()
-        processed_image = preprocess_image(image, processed_image_placeholder, status_text)
+        st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # ---------- PREPROCESS AND OCR ---------------------
+    processed_image = preprocess_image(image, processed_image_placeholder, status_text)
     status_text.markdown('<h4 id="predStatus" style="color:var(--text-1);">Extracting Text...</h4>', unsafe_allow_html=True)
     time.sleep(0.15)
-    extracted_text = multi_psm_extract(processed_image)
+    extracted_text = extract_text(processed_image)
     label, confidence = classify_document(extracted_text, image, processed_image)
     word_count = len(extracted_text.split())
     char_count = len(extracted_text.replace(" ", "").replace("\n", ""))
     avg_word_length = char_count / word_count if word_count > 0 else 0
     freq = word_frequency(extracted_text)
     top_words = top_n_words(freq, 6)
+
+    # ---------- METRICS --------------------------
     metric_grid_placeholder.markdown(f"""
     <div class="results-grid">
       <div class="metric-card">
@@ -361,6 +415,8 @@ if st.session_state.uploaded_image and not st.session_state.processing:
       </div>
     </div>
     """, unsafe_allow_html=True)
+
+    # ---------- TEXT + COPY/DOWNLOAD --------------------------
     quoted_text = quote(extracted_text)
     text_output_placeholder.markdown(f"""
     <div class="text-output-card">
@@ -400,5 +456,3 @@ st.markdown("""
   <p style="color:var(--text-2); font-size:0.8rem;">OCR-TECH - Designed by ADELEKE, OLADOKUN, and OLALEYE</p>
 </div>
 """, unsafe_allow_html=True)
-
-# (You can now add even more features, batch, ML, advanced NLP, pagination, etc.)

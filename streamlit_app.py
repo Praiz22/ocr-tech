@@ -29,7 +29,7 @@ st.markdown("""
     --card-border: rgba(255, 255, 255, 0.2); /* VERY transparent */
     --card-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
     --text-1: #1f1f1f; /* Darkest text */
-    --text-2: #333333; /* Slightly lighter dark text */
+    --text-2: #F0F0F0; 
     --brand: #ff7a18;
     --brand-2: #ff4d00;
     --muted: #e9e9e9;

@@ -31,7 +31,7 @@ st.set_page_config(layout="wide", page_title="OCR-TECH", initial_sidebar_state="
 st.markdown("""
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
-  
+ 
   :root {
     --bg-1: #ffffff;
     --bg-2: #fff5eb;
@@ -51,18 +51,18 @@ st.markdown("""
     --radius-md: 14px;
     --radius-sm: 8px;
   }
-  
+ 
   body {
     font-family: 'Poppins', sans-serif;
     color: var(--text-1);
   }
-  
+ 
   .stApp {
     background: linear-gradient(135deg, var(--bg-2) 0%, var(--bg-3) 100%);
     min-height: 100vh;
     padding: 2rem;
   }
-  
+ 
   .ocr-container {
     max-width: 900px;
     width: 100%;
@@ -71,7 +71,7 @@ st.markdown("""
     flex-direction: column;
     gap: 2rem;
   }
-  
+ 
   .ocr-card {
     background: var(--card-bg);
     backdrop-filter: blur(16px);
@@ -81,25 +81,25 @@ st.markdown("""
     box-shadow: var(--card-shadow);
     color: var(--text-1);
   }
-  
+ 
   .header {
     text-align: center;
     margin-bottom: 2rem;
   }
-  
+ 
   .header h1 {
     font-size: 2.5rem;
     font-weight: 700;
     color: var(--brand);
     margin: 0;
   }
-  
+ 
   .header p {
     color: var(--text-2);
     margin: 0.5rem 0 0;
     font-weight: 500;
   }
-  
+ 
   .file-upload-section {
     display: flex;
     flex-direction: column;
@@ -108,7 +108,7 @@ st.markdown("""
     padding-bottom: 2rem;
     border-bottom: 1px dashed var(--muted);
   }
-  
+ 
   .image-row {
     display: flex;
     flex-direction: row;
@@ -117,7 +117,7 @@ st.markdown("""
     align-items: flex-start;
     flex-wrap: wrap;
   }
-  
+ 
   .image-container {
     width: 100%;
     flex: 1 1 250px;
@@ -133,13 +133,13 @@ st.markdown("""
     justify-content: center;
     position: relative;
   }
-
+ 
   .image-container img {
       width: 100%;
       height: 100%;
       object-fit: contain;
   }
-  
+ 
   .image-preview-container.processing::before {
     content: '';
     position: absolute;
@@ -160,7 +160,7 @@ st.markdown("""
     z-index: 2;
     pointer-events: none;
   }
-  
+ 
   @keyframes streakDown {
     0% {
       top: -80%;
@@ -169,13 +169,13 @@ st.markdown("""
       top: 120%;
     }
   }
-
+ 
   .results-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
     gap: 1rem;
   }
-  
+ 
   .metric-card {
     padding: 0.9rem;
     border-radius: var(--radius-lg);
@@ -183,13 +183,13 @@ st.markdown("""
     border: 1px solid rgba(255, 255, 255, 0.12);
     color: #111 !important;
   }
-  
+ 
   .metric-value {
     font-size: 1.1rem;
     font-weight: 700;
     color: var(--brand-2);
   }
-  
+ 
   .progress-bar-container {
     height: 7px;
     background: #e0e0e0;
@@ -197,17 +197,17 @@ st.markdown("""
     overflow: hidden;
     margin-top: 0.4rem;
   }
-  
+ 
   .progress-bar {
     height: 100%;
     background: var(--brand);
     transition: width 0.2s;
   }
-  
+ 
   .progress-bar.success {
     background: var(--success);
   }
-  
+ 
   .text-output-card {
     background: rgba(255, 255, 255, 0.29);
     padding: 1rem;
@@ -216,7 +216,7 @@ st.markdown("""
     margin-top: 1rem;
     color: #191919 !important;
   }
-  
+ 
   .text-output-card pre {
     white-space: pre-wrap;
     word-wrap: break-word;
@@ -226,14 +226,14 @@ st.markdown("""
     font-size: 1.03rem;
     line-height: 1.35;
   }
-  
+ 
   .button-row {
     display: flex;
     justify-content: center;
     gap: 0.9rem;
     margin-top: 1.2rem;
   }
-  
+ 
   .ocr-button,
   .ocr-button:visited,
   .ocr-button:hover {
@@ -249,11 +249,11 @@ st.markdown("""
     text-decoration: none !important;
     display: inline-block;
   }
-  
+ 
   .ocr-button:hover {
     background-color: var(--brand-2);
   }
-  
+ 
   .st-emotion-cache-1c7y31u {
       border: 2px dashed var(--muted);
       border-radius: var(--radius-lg);
@@ -266,18 +266,18 @@ st.markdown("""
   .st-emotion-cache-1c7y31u:hover {
       background: rgba(255, 255, 255, 0.3);
   }
-
+ 
   .st-emotion-cache-1869e5d div p {
       color: black !important;
   }
-
+ 
   .github-icon-svg {
     width: 20px;
     height: 20px;
     fill: #444;
     transition: transform 0.3s ease-in-out;
   }
-  
+ 
   .github-link:hover .github-icon-svg {
     transform: rotate(360deg);
   }
@@ -296,10 +296,10 @@ def deskew_image(image):
         img_np = np.array(image.convert('L'))
         edges = canny(img_np, sigma=1)
         h, theta, d = hough_line(edges)
-        
+       
         # Find the angle corresponding to the most prominent line
         _, angles, _ = hough_line(edges)
-        
+       
         # Get the most frequent angle
         max_angle = 0
         if len(angles) > 0:
@@ -307,13 +307,13 @@ def deskew_image(image):
             angles_deg = np.rad2deg(angles)
             angles_deg[angles_deg > 45] -= 90
             angles_deg[angles_deg < -45] += 90
-            
+           
             # Use histogram to find the most prominent angle
             hist, bins = np.histogram(angles_deg, bins=90, range=(-45, 45))
             max_angle = bins[np.argmax(hist)]
-        
+       
         status.update(label=f"Skew angle detected: {max_angle:.2f} degrees. Rotating...", state="running")
-        
+       
         # Rotate the original image
         rotated_img = Image.fromarray((rotate(np.array(image), -max_angle, resize=True, mode='edge') * 255).astype(np.uint8))
         status.update(label="Deskewing complete!", state="complete")
@@ -329,16 +329,16 @@ def preprocess_image(img, contrast_factor, deskew):
 
         status.update(label="Converting to Grayscale...", state="running")
         gray = ImageOps.grayscale(img)
-        
+       
         status.update(label="Enhancing Contrast...", state="running")
         enhancer = ImageEnhance.Contrast(gray)
         enhanced = enhancer.enhance(contrast_factor)
-        
+       
         status.update(label="Binarizing (Otsu)...", state="running")
         arr = np.array(enhanced)
         _, binarized = cv2.threshold(arr, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         bin_img = Image.fromarray(binarized)
-        
+       
         status.update(label="Preprocessing complete!", state="complete")
         return bin_img
 
@@ -377,7 +377,7 @@ def draw_text_on_image(image, results):
             (top_left, top_right, bottom_right, bottom_left) = bbox
             top_left = (int(top_left[0]), int(top_left[1]))
             bottom_right = (int(bottom_right[0]), int(bottom_right[1]))
-            
+           
             cv2.rectangle(img=img_np, pt1=top_left, pt2=bottom_right, color=(255, 0, 0), thickness=2)
             cv2.putText(img=img_np, text=text, org=(top_left[0], top_left[1] - 10), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.5, color=(255, 0, 0), thickness=2)
     return Image.fromarray(img_np)
@@ -413,7 +413,7 @@ def extract_text(image, langs, tesseract_psm_modes):
 def classify_document(text, img, processed_img, ocr_results):
     words = text.split()
     real_words = [w for w in words if len(w) > 2 and re.match(r"[a-zA-Z]", w)]
-    
+   
     word_count = len(words)
     line_count = len(text.splitlines())
     char_count = len(text.replace(" ", "").replace("\n", ""))
@@ -421,10 +421,10 @@ def classify_document(text, img, processed_img, ocr_results):
 
     img_width, img_height = img.size
     aspect_ratio = max(img_width, img_height) / min(img_width, img_height) if min(img_width, img_height) > 0 else 1
-    
+   
     document_score = 0
     handwritten_score = 0
-    
+   
     # Heuristics for document vs. picture
     if word_count > 50 and line_count > 10:
         document_score += 40
@@ -432,13 +432,13 @@ def classify_document(text, img, processed_img, ocr_results):
         document_score += 20
     if word_count < 10 or line_count < 3:
         return "Picture", 99, unique_words
-    
+   
     keywords = {'invoice', 'receipt', 'report', 'statement', 'bill', 'form'}
     for word in real_words:
         if word.lower() in keywords:
             document_score += 15
             break
-    
+   
     if document_score > handwritten_score:
         return "Document", min(100, 70 + document_score // 2), unique_words
     elif handwritten_score > document_score:
@@ -535,13 +535,13 @@ if uploaded_file:
 if st.session_state.uploaded_image:
     image = Image.open(BytesIO(st.session_state.uploaded_image)).convert("RGB")
     st.markdown('<div class="ocr-card" style="margin-top:2rem;">', unsafe_allow_html=True)
-    
+   
     col1, col2 = st.columns([1, 2])
     with col1:
         st.markdown('<div class="image-container">', unsafe_allow_html=True)
         st.image(image, caption="Original Image", use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
-    
+   
     with col2:
         st.markdown("""
             <div style="display: flex; flex-direction: column; height: 100%; justify-content: space-between;">
@@ -560,7 +560,7 @@ if st.session_state.uploaded_image:
 
 if st.session_state.ocr_started:
     image = Image.open(BytesIO(st.session_state.uploaded_image)).convert("RGB")
-    
+   
     col1, col2, col3 = st.columns(3)
     with col1:
         st.markdown('<div class="image-container">', unsafe_allow_html=True)
@@ -570,20 +570,20 @@ if st.session_state.ocr_started:
         processed_image_placeholder = st.empty()
     with col3:
         overlayed_image_placeholder = st.empty()
-    
+   
     text_output_placeholder = st.empty()
-    
+   
     start_time = time.time()
-    
+   
     with st.status("Running OCR...", expanded=True) as status_bar:
         # Preprocessing
         processed_image = preprocess_image(image, contrast_factor, deskew)
         processed_image_placeholder.image(processed_image, caption="Preprocessed Image", use_container_width=True)
-        
+       
         # Extraction
         status_bar.update(label="Extracting text...", state="running")
         extracted_text, ocr_results = extract_text(processed_image, selected_langs, selected_psms)
-        
+       
         # Bounding Boxes
         status_bar.update(label="Drawing bounding boxes...", state="running")
         if ocr_results:
@@ -591,11 +591,11 @@ if st.session_state.ocr_started:
             overlayed_image_placeholder.image(overlayed_image, caption="Text Overlay", use_container_width=True)
         else:
             overlayed_image_placeholder.image(image, caption="No OCR Results", use_container_width=True)
-        
+       
         status_bar.update(label="OCR process completed successfully!", state="complete")
-    
+   
     total_time = time.time() - start_time
-    
+   
     label, confidence, unique_words = classify_document(extracted_text, image, processed_image, ocr_results)
     word_count = len(extracted_text.split())
     line_count = len(extracted_text.splitlines())
@@ -664,7 +664,7 @@ if st.session_state.ocr_started:
         }}
     </script>
     """, unsafe_allow_html=True)
-    
+   
 st.markdown("""
 <div style="text-align: center; margin-top: 1.5rem;">
     <p style="color:#444; font-size:0.8rem;">OCR-TECH - ADELEKE, OLADOKUN, OLALEYE</p>

@@ -1,0 +1,35 @@
+# Use the official Python image from the Docker Hub
+FROM python:3.9
+
+# Set the working directory to /app
+WORKDIR /app
+
+# Install system dependencies for Tesseract OCR
+# Hugging Face Spaces is based on a Debian-like OS, so we use apt-get
+RUN apt-get update && apt-get install -y \
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    libtesseract-dev \
+    # The OCR-TECH app also supports multiple languages, so we install
+    # a few common language packs for Tesseract as well.
+    tesseract-ocr-afr \
+    tesseract-ocr-ara \
+    tesseract-ocr-rus \
+    tesseract-ocr-chi-sim \
+    tesseract-ocr-jpn \
+    tesseract-ocr-yor \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy the requirements file and install the Python dependencies
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the Streamlit app file and the config file to the container
+COPY app.py ./
+COPY config.toml ./
+
+# Expose the port on which Streamlit runs
+EXPOSE 8501
+
+# Run the Streamlit app
+CMD ["streamlit", "run", "app.py"]

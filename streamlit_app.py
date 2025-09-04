@@ -17,17 +17,6 @@ from math import degrees
 # PAGE & GLOBALS
 # ----------------------------------------
 st.set_page_config(layout="wide", page_title="OCR-TECH", initial_sidebar_state="expanded")
-
-# IMPORTANT: Tesseract must be installed and in your system's PATH.
-# For Debian/Ubuntu: sudo apt-get install tesseract-ocr
-# For macOS: brew install tesseract
-# On Windows, download from: https://tesseract-ocr.github.io/tessdoc/Downloads.html
-# If not in PATH, uncomment the line below and set your specific path.
-# pytesseract.pytesseract.tesseract_cmd = r'/usr/bin/tesseract'
-
-# ----------------------------------------
-# CSS for glassmorphism and compact containers
-# ----------------------------------------
 st.markdown("""
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
@@ -36,11 +25,11 @@ st.markdown("""
     --bg-1: #ffffff;
     --bg-2: #fff5eb;
     --bg-3: #ffe7cc;
-    --card-bg: rgba(255, 255, 255, 0.3);
-    --card-border: rgba(255, 255, 255, 0.4);
-    --card-shadow: 0 18px 44px rgba(0, 0, 0, 0.28);
-    --text-1: #1f1f1f;
-    --text-2: #5a5a5a;
+    --card-bg: rgba(255, 255, 255, 0.1); /* VERY transparent */
+    --card-border: rgba(255, 255, 255, 0.2); /* VERY transparent */
+    --card-shadow: 0 5px 15px rgba(0, 0, 0, 0.08); /* Much reduced shadow */
+    --text-1: #1f1f1f; /* Darkest text */
+    --text-2: #5a5a5a; /* Slightly lighter dark text */
     --brand: #ff7a18;
     --brand-2: #ff4d00;
     --muted: #e9e9e9;
@@ -54,7 +43,7 @@ st.markdown("""
   
   body {
     font-family: 'Poppins', sans-serif;
-    color: var(--text-1);
+    color: var(--text-1); /* Default body text color */
   }
   
   .stApp {
@@ -79,7 +68,7 @@ st.markdown("""
     border-radius: var(--radius-xl);
     padding: 2.5rem;
     box-shadow: var(--card-shadow);
-    color: var(--text-1);
+    color: var(--text-1); /* Ensure card text is dark */
   }
   
   .header {
@@ -126,7 +115,7 @@ st.markdown("""
     max-height: 250px;
     overflow: hidden;
     border-radius: 10px;
-    background: rgba(255, 255, 255, 0.13);
+    background: rgba(255, 255, 255, 0.08); /* More transparent */
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
     display: flex;
     align-items: center;
@@ -179,9 +168,9 @@ st.markdown("""
   .metric-card {
     padding: 0.9rem;
     border-radius: var(--radius-lg);
-    background: rgba(255, 255, 255, 0.2);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    color: #111 !important;
+    background: rgba(255, 255, 255, 0.1); /* More transparent */
+    border: 1px solid rgba(255, 255, 255, 0.08); /* More transparent */
+    color: var(--text-1) !important; /* Ensure metric text is dark */
   }
   
   .metric-value {
@@ -209,19 +198,19 @@ st.markdown("""
   }
   
   .text-output-card {
-    background: rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.15); /* More transparent */
     padding: 1rem;
     border-radius: var(--radius-xl);
-    border: 1px solid rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.05);
     margin-top: 1rem;
-    color: #191919 !important;
+    color: var(--text-1) !important; /* Ensure text output is dark */
   }
   
   .text-output-card pre {
     white-space: pre-wrap;
     word-wrap: break-word;
     font-family: 'Poppins', sans-serif;
-    color: #191919 !important;
+    color: var(--text-1) !important;
     background: transparent !important;
     font-size: 1.03rem;
     line-height: 1.35;
@@ -254,31 +243,59 @@ st.markdown("""
     background-color: var(--brand-2);
   }
   
-  .st-emotion-cache-1c7y31u {
-      border: 2px dashed var(--muted);
-      border-radius: var(--radius-lg);
-      padding: 2rem;
-      text-align: center;
-      cursor: pointer;
-      background: rgba(255, 255, 255, 0.2);
-      transition: background 0.3s ease;
-  }
-  .st-emotion-cache-1c7y31u:hover {
-      background: rgba(255, 255, 255, 0.3);
+  /* --- Global Text Color Overrides for Streamlit Components --- */
+  
+  /* All h tags */
+  h1, h2, h3, h4, h5, h6 {
+      color: var(--text-1) !important;
   }
 
+  /* All p tags */
+  p {
+      color: var(--text-2) !important;
+  }
+
+  /* Specific targeting for file uploader text (filename and size) */
   .st-emotion-cache-1c7y31u p {
       color: black !important;
   }
 
+  /* Target the "Ready to process?" text (if still white) */
   .st-emotion-cache-1869e5d div p {
       color: black !important;
   }
-  
+
+  /* Sidebar text labels */
+  .st-emotion-cache-16idsys p {
+      color: var(--text-1) !important;
+  }
+  .st-emotion-cache-10mrprx p {
+      color: var(--text-1) !important;
+  }
+
+  /* Text inside status messages */
+  .stStatus .st-emotion-cache-13xt0m9 p {
+      color: var(--text-1) !important;
+  }
+  .stStatus .st-emotion-cache-1jm7cjm p {
+      color: var(--text-1) !important;
+  }
+
+  /* Caption text under images */
+  .st-emotion-cache-fofk9f p {
+      color: var(--text-2) !important;
+  }
+
+  /* Help text for widgets */
+  .st-emotion-cache-p4dp75 p {
+    color: var(--text-2) !important;
+  }
+
+  /* --- Other elements for consistency --- */
   .github-icon-svg {
     width: 20px;
     height: 20px;
-    fill: #444;
+    fill: #444; /* Darker fill for icon */
     transition: transform 0.3s ease-in-out;
   }
   
@@ -476,7 +493,8 @@ if 'last_uploaded_filename' not in st.session_state:
 st.sidebar.header("OCR Settings")
 st.sidebar.markdown("Configure your OCR extraction preferences.")
 
-available_langs = ['en', 'ar', 'ru', 'ch_sim', 'ja']
+# Added 'yo' for Yoruba
+available_langs = ['en', 'ar', 'ru', 'ch_sim', 'ja', 'yo'] 
 selected_langs = st.sidebar.multiselect(
     'Select language(s) for OCR',
     options=available_langs,
@@ -550,8 +568,8 @@ if st.session_state.uploaded_image:
         st.markdown("""
             <div style="display: flex; flex-direction: column; height: 100%; justify-content: space-between;">
                 <div>
-                    <h4>Ready to process?</h4>
-                    <p>Review the settings in the sidebar and press the button below to begin the OCR process.</p>
+                    <h4 style="color: var(--text-1) !important;">Ready to process?</h4>
+                    <p style="color: var(--text-2) !important;">Review the settings in the sidebar and press the button below to begin the OCR process.</p>
                 </div>
                 <div style="display:flex; justify-content:center; padding-top:1rem;">
             """, unsafe_allow_html=True)
@@ -612,7 +630,7 @@ if st.session_state.ocr_started:
         <div class="metric-card">
             <h4>Prediction</h4>
             <div class="metric-value" style="color:var(--brand);">{label}</div>
-            <p style="color:#444; font-size:0.83rem;">(Classified)</p>
+            <p style="color:var(--text-2) !important; font-size:0.83rem;">(Classified)</p>
         </div>
         <div class="metric-card">
             <h4>Confidence</h4>
@@ -624,17 +642,17 @@ if st.session_state.ocr_started:
         <div class="metric-card">
             <h4>Text Count</h4>
             <div class="metric-value">{word_count}</div>
-            <p style="color:#444; font-size:0.83rem;">(Words)</p>
+            <p style="color:var(--text-2) !important; font-size:0.83rem;">(Words)</p>
         </div>
         <div class="metric-card">
             <h4>Processing</h4>
             <div class="metric-value">{total_time:.2f}s</div>
-            <p style="color:#444; font-size:0.83rem;">(Total Time)</p>
+            <p style="color:var(--text-2) !important; font-size:0.83rem;">(Total Time)</p>
         </div>
         <div class="metric-card">
             <h4>Top Words</h4>
             <div class="metric-value">{', '.join([f"{w}({c})" for w, c in top_words]) or '-'}</div>
-            <p style="color:#444; font-size:0.83rem;">(Freq.)</p>
+            <p style="color:var(--text-2) !important; font-size:0.83rem;">(Freq.)</p>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -642,7 +660,7 @@ if st.session_state.ocr_started:
     quoted_text = quote(extracted_text)
     st.markdown(f"""
     <div class="text-output-card">
-        <h4>Extracted Text</h4>
+        <h4 style="color: var(--text-1) !important;">Extracted Text</h4>
         <pre id="ocrText">{extracted_text or "[No visible text]"}</pre>
         <div class="button-row">
             <button class="ocr-button" onclick="copyToClipboard()">Copy Text</button>
@@ -671,11 +689,14 @@ if st.session_state.ocr_started:
     
 st.markdown("""
 <div style="text-align: center; margin-top: 1.5rem;">
-    <p style="color:#444; font-size:0.8rem;">OCR-TECH - ADELEKE, OLADOKUN, OLALEYE</p>
+    <p style="color:var(--text-2) !important; font-size:0.8rem;">OCR-TECH - ADELEKE, OLADOKUN, OLALEYE</p>
     <a href="https://github.com/Praiz22/ocr-tech" target="_blank" class="github-link">
-        <span style="display:inline-flex; align-items:center; gap:5px; color:#444; font-size:0.8rem; font-weight: 500;">
+        <span style="display:inline-flex; align-items:center; gap:5px; color:var(--text-2) !important; font-size:0.8rem; font-weight: 500;">
             Github Repo- Praiztech
-            <svg class="github-icon-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><path d="M165.9 397.4c0 2-2.3 4-4.9 4-2.7 0-4.9-2-4.9-4 0-2 2.3-4 4.9-4 2.7 0 4.9 2 4.9 4zm-14-100.2c.4 1.3.1 2.5-.6 3.5-.9 1.4-1.9 2.7-3.2 3.8-1.5 1.3-3.2 2.6-5 3.6-2.6 1.3-5.5 2.2-8.5 2.5-3.3 .4-6.6-.7-9.3-2.6-2.5-1.7-4.4-4.1-5.6-7-.9-2.2-1.3-4.5-1.4-6.8-2.1-4.9-1.9-9.8.5-14.7 1.5-2.8 3.5-5.5 5.9-7.8 1.9-1.8 4-3.5 6.2-5.1 2.3-1.6 4.7-3 7.2-4.1 2.3-1.2 4.9-2.2 7.6-2.7 2.3-.5 4.6-1.1 7-.9 2.5 .3 5 .8 7.3 1.9 2.1 .9 4.1 2.2 5.9 3.8 2.3 2.1 4.2 4.5 5.8 7.2 1.3 2 2.2 4.2 2.7 6.6 .5 2.4 .7 4.9 .5 7.4-.2 2.6-.8 5.1-1.7 7.5zm-51.5-7.4c.5 1.2.3 2.6-.5 3.8-.9 1.4-2.1 2.7-3.5 3.9-1.6 1.4-3.5 2.6-5.5 3.7-2.6 1.4-5.5 2.2-8.6 2.5-3.4 .4-6.8-.7-9.6-2.7-2.7-1.7-4.7-4.2-6-7.2-.9-2.3-1.3-4.8-1.4-7.2-2.3-5.2-2.2-10.4-.1-15.5 1.6-3 3.7-5.8 6.3-8.2 2.1-1.9 4.3-3.7 6.6-5.4 2.4-1.7 4.9-3.2 7.6-4.3 2.4-1.2 5.1-2.2 7.9-2.7 2.4-.5 4.9-1.1 7.4-.9 2.6 .3 5.2 .8 7.5 2 2.2 1 4.2 2.4 6 4 2.3 2.1 4.2 4.6 5.9 7.4 1.4 2.2 2.2 4.6 2.7 7.1 .5 2.5 .7 5 .5 7.6-.2 2.6-.8 5.1-1.8 7.5zm-5.1-47.5c.3 1.2 .1 2.4-.6 3.5-.9 1.4-2.1 2.7-3.4 3.9-1.5 1.4-3.3 2.6-5.2 3.6-2.4 1.2-5 1.9-7.8 2.1-3.1 .3-6.2-.7-8.8-2.4-2.4-1.6-4.2-3.9-5.4-6.6-.8-2-1.2-4.1-1.3-6.3-2-4.7-1.9-9.5 .4-14.2 1.4-2.7 3.3-5.2 5.6-7.4 1.8-1.7 3.8-3.3 5.9-4.9 2.2-1.6 4.6-3 7.1-4.1 2.2-1.1 4.6-2 7.1-2.5 2.1-.4 4.3-.9 6.5-.7 2.3 .2 4.6 .6 6.7 1.6 2 .9 3.9 2.2 5.6 3.7 2.2 2.1 4 4.5 5.5 7.1 1.2 2 2 4.1 2.5 6.3 .4 2.2 .6 4.5 .4 6.8-.2 2.2-.6 4.5-1.5 6.6zm-11.4 102c.4 2.1-.5 4.3-2.6 5.5-2.2 1.2-4.6 1.9-7.1 2.1-3.2 .3-6.4-.8-9.1-2.9-2.7-2.1-4.7-4.8-6.1-8-1.2-2.7-1.8-5.6-1.9-8.5-.8-5.3-.2-10.7 2.2-15.8 1.8-3.8 4.2-7.3 7-10.4 2.5-2.8 5.3-5.3 8.3-7.5 2.7-2 5.6-3.7 8.6-5.1 3-1.4 6.2-2.4 9.4-2.8 3.3-.4 6.7-.8 10-1.1 3.5-.3 7.1-.6 10.6-.2 3.7 .4 7.3 1.2 10.8 2.6 3.3 1.4 6.5 3.1 9.6 5.2 3.2 2.2 6.1 4.7 8.8 7.6 2.5 2.6 4.6 5.5 6.3 8.7 1.5 3.2 2.5 6.6 3.2 10.1 .7 3.4 .9 6.9 .6 10.4-.3 3.3-.8 6.7-1.7 9.9zm135-26.1c.5 1.2.3 2.6-.5 3.8-.9 1.4-2.1 2.7-3.5 3.9-1.6 1.4-3.5 2.6-5.5 3.7-2.6 1.4-5.5 2.2-8.6 2.5-3.4 .4-6.8-.7-9.6-2.7-2.7-1.7-4.7-4.2-6-7.2-.9-2.3-1.3-4.8-1.4-7.2-2.3-5.2-2.2-10.4-.1-15.5 1.6-3 3.7-5.8 6.3-8.2 2.1-1.9 4.3-3.7 6.6-5.4 2.4-1.7 4.9-3.2 7.6-4.3 2.4-1.2 5.1-2.2 7.9-2.7 2.4-.5 4.9-1.1 7.4-.9 2.6 .3 5.2 .8 7.5 2 2.2 1 4.2 2.4 6 4 2.3 2.1 4.2 4.6 5.9 7.4 1.4 2.2 2.2 4.6 2.7 7.1 .5 2.5 .7 5 .5 7.6-.2 2.6-.8 5.1-1.8 7.5zm-5.1-47.5c.3 1.2 .1 2.4-.6 3.5-.9 1.4-2.1 2.7-3.4 3.9-1.5 1.4-3.3 2.6-5.2 3.6-2.4 1.2-5 1.9-7.8 2.1-3.1 .3-6.2-.7-8.8-2.4-2.4-1.6-4.2-3.9-5.4-6.6-.8-2-1.2-4.1-1.3-6.3-2-4.7-1.9-9.5 .4-14.2 1.4-2.7 3.3-5.2 5.6-7.4 1.8-1.7 3.8-3.3 5.9-4.9 2.2-1.6 4.6-3 7.1-4.1 2.2-1.1 4.6-2 7.1-2.5 2.1-.4 4.3-.9 6.5-.7 2.3 .2 4.6 .6 6.7 1.6 2 .9 3.9 2.2 5.6 3.7 2.2 2.1 4 4.5 5.5 7.1 1.2 2 2 4.1 2.5 6.3 .4 2.2 .6 4.5 .4 6.8-.2 2.2-.6 4.5-1.5 6.6zm114.2 60.1c.3 1.2 .1 2.4-.6 3.5-.9 1.4-2.1 2.7-3.4 3.9-1.5 1.4-3.3 2.6-5.2 3.6-2.4 1.2-5 1.9-7.8 2.1-3.1 .3-6.2-.7-8.8-2.4-2.4-1.6-4.2-3.9-5.4-6.6-.8-2-1.2-4.1-1.3-6.3-2-4.7-1.9-9.5 .4-14.2 1.4-2.7 3.3-5.2 5.6-7.4 1.8-1.7 3.8-3.3 5.9-4.9 2.2-1.6 4.6-3 7.1-4.1 2.2-1.1 4.6-2 7.1-2.5 2.1-.4 4.3-.9 6.5-.7 2.3 .2 4.6 .6 6.7 1.6 2 .9 3.9 2.2 5.6 3.7 2.2 2.1 4 4.5 5.5 7.1 1.2 2 2 4.1 2.5 6.3 .4 2.2 .6 4.5 .4 6.8-.2 2.2-.6 4.5-1.5 6.6zm-29.3 103.1c-1.4 1.2-3.2 2.2-5.1 3.1-2.2 1-4.6 1.5-7.1 1.5-2.7 0-5.3-.4-7.8-1.2-2.5-.8-4.9-2-7.1-3.6-2.2-1.5-4.2-3.3-5.9-5.3-1.6-2.1-2.8-4.5-3.7-7.1-.8-2.5-1.2-5.2-1.2-7.9 0-3.1 .5-6.2 1.5-9.1 1-2.9 2.3-5.7 3.9-8.2 1.7-2.6 3.6-5 5.7-7.2 2-2.1 4.2-3.9 6.6-5.4 2.4-1.5 4.9-2.7 7.6-3.6 2.5-.8 5.1-1.2 7.8-1.2 2.6 0 5.2 .4 7.7 1.2 2.5 .8 4.9 2 7.2 3.6 2.3 1.5 4.4 3.4 6.2 5.5 1.7 2.1 3 4.5 3.9 7.1 .8 2.6 1.2 5.2 1.2 8-.1 3.2-.5 6.3-1.6 9.3-1 2.9-2.3 5.7-4 8.2zm-28-144.1c-1.4 1.2-3.2 2.2-5.1 3.1-2.2 1-4.6 1.5-7.1 1.5-2.7 0-5.3-.4-7.8-1.2-2.5-.8-4.9-2-7.1-3.6-2.2-1.5-4.2-3.3-5.9-5.3-1.6-2.1-2.8-4.5-3.7-7.1-.8-2.5-1.2-5.2-1.2-7.9 0-3.1 .5-6.2 1.5-9.1 1-2.9 2.3-5.7 3.9-8.2 1.7-2.6 3.6-5 5.7-7.2 2-2.1 4.2-3.9 6.6-5.4 2.4-1.5 4.9-2.7 7.6-3.6 2.5-.8 5.1-1.2 7.8-1.2 2.6 0 5.2 .4 7.7 1.2 2.5 .8 4.9 2 7.2 3.6 2.3 1.5 4.4 3.4 6.2 5.5 1.7 2.1 3 4.5 3.9 7.1 .8 2.6 1.2 5.2 1.2 8-.1 3.2-.5 6.3-1.6 9.3-1 2.9-2.3 5.7-4 8.2zm23.4 216c-2.3 2.1-4.2 4.6-5.9 7.4-1.4 2.2-2.2 4.6-2.7 7.1-.5 2.5-.7 5-.5 7.6 .2 2.6 .8 5.1 1.8 7.5 1.3 3.1 3 5.7 5.1 8 2.1 2.2 4.6 4.1 7.4 5.9 2.8 1.8 5.7 3 8.8 3.9 3.1 .9 6.3 1.3 9.4 1.3 3.3 0 6.6-.4 9.8-1.3 3.2-.8 6.2-2.2 9.1-4 2.8-1.7 5.5-3.7 7.8-5.9 2.4-2.3 4.3-4.9 5.8-7.8 1.4-2.9 2.3-6.1 2.7-9.3 .4-3.2 .5-6.5 .1-9.7-.5-3.1-1.3-6.1-2.5-9-.9-2.1-2.2-4.1-3.7-6-1.4-1.8-3-3.4-4.8-4.9-1.9-1.5-3.9-2.8-6.1-3.9-2.2-1.1-4.6-2-7.1-2.5-2.5-.5-5.1-.7-7.6-.6-2.5 .1-5 .6-7.3 1.6-2.2 1-4.3 2.3-6.3 3.8zm11.3-88.7c.3 1.2 .1 2.4-.6 3.5-.9 1.4-2.1 2.7-3.4 3.9-1.5 1.4-3.3 2.6-5.2 3.6-2.4 1.2-5 1.9-7.8 2.1-3.1 .3-6.2-.7-8.8-2.4-2.4-1.6-4.2-3.9-5.4-6.6-.8-2-1.2-4.1-1.3-6.3-2-4.7-1.9-9.5 .4-14.2 1.4-2.7 3.3-5.2 5.6-7.4 1.8-1.7 3.8-3.3 5.9-4.9 2.2-1.6 4.6-3 7.1-4.1 2.2-1.1 4.6-2 7.1-2.5 2.1-.4 4.3-.9 6.5-.7 2.3 .2 4.6 .6 6.7 1.6 2 .9 3.9 2.2 5.6 3.7 2.2 2.1 4 4.5 5.5 7.1 1.2 2 2 4.1 2.5 6.3 .4 2.2 .6 4.5 .4 6.8-.2 2.2-.6 4.5-1.5 6.6zm-113.8 62.7c.4 1.3.1 2.5-.6 3.5-.9 1.4-1.9 2.7-3.2 3.8-1.5 1.3-3.2 2.6-5 3.6-2.6 1.3-5.5 2.2-8.5 2.5-3.3 .4-6.6-.7-9.3-2.6-2.5-1.7-4.4-4.1-5.6-7-.9-2.2-1.3-4.5-1.4-6.8-2.1-4.9-1.9-9.8.5-14.7 1.5-2.8 3.5-5.5 5.9-7.8 1.9-1.8 4-3.5 6.2-5.1 2.3-1.6 4.7-3 7.2-4.1 2.3-1.2 4.9-2.2 7.6-2.7 2.3-.5 4.6-1.1 7-.9 2.5 .3 5 .8 7.3 1.9 2.1 .9 4.1 2.2 5.9 3.8 2.3 2.1 4.2 4.5 5.8 7.2 1.3 2 2.2 4.2 2.7 6.6 .5 2.4 .7 4.9 .5 7.4-.2 2.6-.8 5.1-1.7 7.5zM248 8C111 8 0 119 0 256s111 248 248 248 248-111 248-248S385 8 248 8zm44.2 222.1c1.3 1.3 2.5 2.7 3.7 4.2 1.3 1.5 2.3 3.1 3.3 4.7 1.2 2 2 4.1 2.6 6.3 .7 2.2 1 4.5 1 6.8 0 3-.5 6-1.4 8.9-.9 2.8-2.2 5.5-3.8 8-1.6 2.6-3.4 5-5.6 7.2-2.2 2.1-4.6 3.9-7.1 5.4-2.5 1.5-5.1 2.7-7.8 3.6-2.7 .9-5.4 1.2-8.1 1.2-2.9 0-5.8-.4-8.7-1.4-3-.9-5.9-2.2-8.6-3.8-2.7-1.6-5.3-3.6-7.8-5.8-2.5-2.3-4.8-5-6.6-7.9-1.7-3-3-6.2-3.8-9.6-.8-3.4-1.2-6.9-1.1-10.4 .1-3.3 .7-6.6 1.7-9.9 1-3.2 2.4-6.2 4.1-9 1.5-2.5 3.4-4.8 5.6-6.9 2.1-2.1 4.5-3.9 7-5.4 2.5-1.5 5.1-2.6 7.8-3.5 2.7-.9 5.5-1.2 8.2-1.2 2.9 0 5.8 .4 8.7 1.4 3 .9 5.8 2.2 8.5 3.8 2.7 1.6 5.3 3.6 7.8 5.9 2.5 2.3 4.8 5.1 6.6 8.1 1.7 3 3 6.3 3.8 9.7 .8 3.4 1.2 6.9 1.1 10.4-.1 3.3-.7 6.6-1.8 9.9z"/></svg>
+            <svg class="github-icon-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                <path d="M12 0C5.373 0 0 5.373 0 12c0 5.302 3.438 9.799 8.205 11.387.6.11.82-.26.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.043-1.61-4.043-1.61-.546-1.387-1.334-1.758-1.334-1.758-1.087-.744.08-.729.08-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.492.998.108-.775.42-1.305.762-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.382 1.235-3.22-.125-.3-.535-1.52.117-3.176 0 0 1.005-.322 3.3-.997.96.26 1.98.39 3 .39 1.02 0 2.04-.13 3-.39 2.295.675 3.295.997 3.295.997.652 1.656.242 2.876.117 3.176.77.838 1.235 1.91 1.235 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .318.22.69.825.577C20.562 21.799 24 17.302 24 12c0-6.627-5.373-12-12-12z"/>
+            </svg>
+        </span>
     </a>
 </div>
 """, unsafe_allow_html=True)

@@ -402,7 +402,7 @@ def preprocess_image(img, contrast_factor, deskew):
 # ----------------------------------------
 # OCR EXTRACTION
 # ----------------------------------------
-@st.cache_resource(show_spinner=False)
+@st.cache_data(show_spinner=False)
 def get_easyocr_reader(lang_list):
     return easyocr.Reader(lang_list)
 

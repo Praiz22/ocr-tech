@@ -572,7 +572,7 @@ st.markdown("""
 <div class="ocr-container">
     <div class="header">
         <h1>OCR-TECH</h1>
-        <p>Better Text Extraction from Images (Powered by EasyOCR)</p>
+        <p>Better Text Extraction from Images (Powered by EasyOCR, Tesseract, PraixTech)</p>
     </div>
     <div class="ocr-card">
         <div style="text-align: center;">

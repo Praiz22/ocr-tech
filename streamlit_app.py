@@ -6,8 +6,6 @@ import easyocr
 import pytesseract
 import re
 import time
-import base64
-from urllib.parse import quote
 from io import BytesIO
 
 # ----------------------------------------
@@ -337,7 +335,7 @@ def draw_text_on_image(image, results):
             cv2.putText(img=img_np, text=text, org=(top_left[0], top_left[1] - 10), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.5, color=(255, 0, 0), thickness=2)
     return Image.fromarray(img_np)
 
-def extract_text(image, langs):
+def extract_text(image, langs, min_conf):
     """
     Extracts text, first attempting with EasyOCR, then falling back to
     Tesseract if EasyOCR fails or produces poor results.
@@ -345,7 +343,7 @@ def extract_text(image, langs):
     """
     easyocr_results = None
     try:
-        text, easyocr_results = recognize_text_easyocr(image, langs)
+        text, easyocr_results = recognize_text_easyocr(image, langs, min_conf)
         filtered = clean_text(text)
         if len(filtered) > 8 and any(c.isalpha() for c in filtered):
             return filtered, easyocr_results
@@ -354,45 +352,58 @@ def extract_text(image, langs):
 
     # Fallback to Tesseract with different PSM modes
     for psm in [6, 11, 3, 7]:
-        text = pytesseract.image_to_string(image, config=f"--psm {psm}")
-        filtered = clean_text(text)
-        if len(filtered) > 8 and any(c.isalpha() for c in filtered):
-            return filtered, [] # Return empty list for no EasyOCR results
+        try:
+            text = pytesseract.image_to_string(image, config=f"--psm {psm}")
+            filtered = clean_text(text)
+            if len(filtered) > 8 and any(c.isalpha() for c in filtered):
+                return filtered, [] # Return empty list for no EasyOCR results
+        except Exception:
+            continue
     return "", []
 
 # ----------------------------------------
 # Image Preprocessing Pipeline (Enhanced)
 # ----------------------------------------
-def preprocess_image(img, processed_placeholder, status_placeholder):
+def preprocess_image(img, status_placeholder, progress_placeholder):
     """
     Applies a series of image processing techniques to enhance OCR accuracy.
-    Includes dynamic updates for a more interactive feel.
+    Includes a progress bar for dynamic updates.
     """
+    # 1. Grayscale Conversion
     status_placeholder.markdown('**Normalizing Image...**')
-    time.sleep(0.1)
+    progress_placeholder.progress(20)
     gray = ImageOps.grayscale(img)
-    processed_placeholder.image(gray, caption="Grayscale", use_container_width=True)
     
+    # 2. Skew Correction
+    status_placeholder.markdown('**Correcting Skew...**')
+    progress_placeholder.progress(40)
+    img_np = np.array(gray)
+    coords = np.column_stack(np.where(img_np < 200))
+    angle = cv2.minAreaRect(coords)[-1]
+    if angle < -45:
+        angle = -(90 + angle)
+    else:
+        angle = -angle
+    (h, w) = img_np.shape[:2]
+    center = (w // 2, h // 2)
+    M = cv2.getRotationMatrix2D(center, angle, 1.0)
+    rotated = cv2.warpAffine(img_np, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
+    
+    # 3. Contrast Enhancement
     status_placeholder.markdown('**Enhancing Contrast...**')
-    time.sleep(0.1)
-    enhancer = ImageEnhance.Contrast(gray)
+    progress_placeholder.progress(60)
+    enhancer = ImageEnhance.Contrast(Image.fromarray(rotated))
     enhanced = enhancer.enhance(2.0)
-    processed_placeholder.image(enhanced, caption="Contrast Enhanced", use_container_width=True)
     
-    status_placeholder.markdown('**Binarizing (Otsu)...**')
-    time.sleep(0.1)
-    arr = np.array(enhanced)
-    _, binarized = cv2.threshold(arr, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    bin_img = Image.fromarray(binarized)
-    processed_placeholder.image(bin_img, caption="Binarized (Otsu)", use_container_width=True)
-    
+    # 4. Denoising
     status_placeholder.markdown('**Denoising (Morphological)...**')
-    time.sleep(0.1)
+    progress_placeholder.progress(80)
+    arr = np.array(enhanced)
     kernel = np.ones((1, 1), np.uint8)
-    denoised_np = cv2.morphologyEx(binarized, cv2.MORPH_OPEN, kernel)
+    denoised_np = cv2.morphologyEx(arr, cv2.MORPH_OPEN, kernel)
     denoised = Image.fromarray(denoised_np)
-    processed_placeholder.image(denoised, caption="Denoised", use_container_width=True)
     
+    progress_placeholder.progress(100)
     return denoised
 
 # ----------------------------------------
@@ -480,6 +491,14 @@ selected_langs = st.sidebar.multiselect(
     default=['en'],
     help="Select the languages present in the image. Multiple languages are supported."
 )
+min_conf = st.sidebar.slider(
+    'EasyOCR Confidence Threshold',
+    min_value=0.0,
+    max_value=1.0,
+    value=0.2,
+    step=0.05,
+    help="Adjust the minimum confidence level for text recognition. Lower values may capture more text but increase false positives."
+)
 
 if not selected_langs:
     st.sidebar.warning("Please select at least one language.")
@@ -503,22 +522,21 @@ st.markdown("""
 uploaded_file = st.file_uploader("", type=["png", "jpg", "jpeg"], key="file_uploader", label_visibility="collapsed")
 st.markdown("""</div></div></div>""", unsafe_allow_html=True)
 
-if uploaded_file:
-    if st.session_state.last_uploaded_filename != uploaded_file.name:
-        st.session_state.last_uploaded_filename = uploaded_file.name
+if uploaded_file and st.session_state.last_uploaded_filename != uploaded_file.name:
+    st.session_state.last_uploaded_filename = uploaded_file.name
+    st.session_state.uploaded_image = None
+    st.session_state.processing = True
+    try:
+        image_data = uploaded_file.getvalue()
+        _ = Image.open(BytesIO(image_data))
+        st.session_state.uploaded_image = image_data
+        st.rerun()
+    except Exception:
+        st.error("The file you uploaded could not be identified as a valid image. Please try a different file.")
         st.session_state.uploaded_image = None
         st.session_state.processing = False
-        try:
-            image_data = uploaded_file.getvalue()
-            _ = Image.open(BytesIO(image_data))
-            st.session_state.uploaded_image = image_data
-            st.rerun()
-        except Exception:
-            st.error("The file you uploaded could not be identified as a valid image. Please try a different file.")
-            st.session_state.uploaded_image = None
 
-if st.session_state.uploaded_image and not st.session_state.processing:
-    st.session_state.processing = True
+if st.session_state.uploaded_image and st.session_state.processing:
     image = Image.open(BytesIO(st.session_state.uploaded_image)).convert("RGB")
     
     col1, col2, col3 = st.columns(3)
@@ -526,7 +544,7 @@ if st.session_state.uploaded_image and not st.session_state.processing:
     with col1:
         st.markdown(
             '<div class="image-container">'
-            f'<div class="image-preview-container {"processing" if st.session_state.processing else ""}">',
+            f'<div class="image-preview-container processing">',
             unsafe_allow_html=True)
         st.image(image, caption="Original", use_container_width=True)
         st.markdown('</div></div>', unsafe_allow_html=True)
@@ -542,22 +560,24 @@ if st.session_state.uploaded_image and not st.session_state.processing:
         st.markdown('</div>', unsafe_allow_html=True)
 
     status_text = st.empty()
-    metric_grid_placeholder = st.empty()
-    text_output_placeholder = st.empty()
+    progress_bar = st.progress(0, text="Starting...")
     
-    start_time = time.time()
-    
-    status_text.markdown('**Preprocessing Image...**')
+    # Step 1: Preprocessing
     preprocess_start = time.time()
-    processed_image = preprocess_image(image, processed_image_placeholder, status_text)
+    processed_image = preprocess_image(image, status_text, progress_bar)
     preprocess_time = time.time() - preprocess_start
+    processed_image_placeholder.image(processed_image, caption="Preprocessed", use_container_width=True)
     
+    # Step 2: Extraction
     status_text.markdown('**Extracting Text...**')
+    progress_bar.progress(90, text="Extracting text...")
     extract_start = time.time()
-    extracted_text, ocr_results = extract_text(processed_image, selected_langs)
+    extracted_text, ocr_results = extract_text(processed_image, selected_langs, min_conf)
     extract_time = time.time() - extract_start
     
+    # Step 3: Overlay
     status_text.markdown('**Drawing Text on Image...**')
+    progress_bar.progress(95, text="Generating overlay...")
     overlay_start = time.time()
     overlayed_image = None
     if ocr_results:
@@ -567,7 +587,10 @@ if st.session_state.uploaded_image and not st.session_state.processing:
         overlayed_image_placeholder.image(image, caption="No OCR Results", use_container_width=True)
     overlay_time = time.time() - overlay_start
     
-    total_time = time.time() - start_time
+    total_time = preprocess_time + extract_time + overlay_time
+    
+    progress_bar.progress(100, text="Done!")
+    status_text.markdown('**Done!**')
     
     label, confidence = classify_document(extracted_text, image, processed_image, ocr_results)
     word_count = len(extracted_text.split())
@@ -576,7 +599,7 @@ if st.session_state.uploaded_image and not st.session_state.processing:
     freq = word_frequency(extracted_text)
     top_words = top_n_words(freq, 5)
 
-    metric_grid_placeholder.markdown(f"""
+    st.markdown(f"""
     <div class="results-grid">
         <div class="metric-card">
             <h4>Prediction</h4>
@@ -591,14 +614,24 @@ if st.session_state.uploaded_image and not st.session_state.processing:
             </div>
         </div>
         <div class="metric-card">
+            <h4>Pre-processing</h4>
+            <div class="metric-value">{preprocess_time:.2f}s</div>
+            <p style="color:#444; font-size:0.83rem;">(Step Time)</p>
+        </div>
+        <div class="metric-card">
+            <h4>Extraction</h4>
+            <div class="metric-value">{extract_time:.2f}s</div>
+            <p style="color:#444; font-size:0.83rem;">(Step Time)</p>
+        </div>
+        <div class="metric-card">
+            <h4>Total Time</h4>
+            <div class="metric-value">{total_time:.2f}s</div>
+            <p style="color:#444; font-size:0.83rem;">(All steps)</p>
+        </div>
+        <div class="metric-card">
             <h4>Text Count</h4>
             <div class="metric-value">{word_count}</div>
             <p style="color:#444; font-size:0.83rem;">(Words)</p>
-        </div>
-        <div class="metric-card">
-            <h4>Processing</h4>
-            <div class="metric-value">{total_time:.2f}s</div>
-            <p style="color:#444; font-size:0.83rem;">(Total Time)</p>
         </div>
         <div class="metric-card">
             <h4>Top Words</h4>
@@ -607,43 +640,32 @@ if st.session_state.uploaded_image and not st.session_state.processing:
         </div>
     </div>
     """, unsafe_allow_html=True)
-
-    quoted_text = quote(extracted_text)
-    text_output_placeholder.markdown(f"""
+    
+    st.markdown(f"""
     <div class="text-output-card">
         <h4>Extracted Text</h4>
         <pre id="ocrText">{extracted_text or "[No visible text]"}</pre>
         <div class="button-row">
             <button class="ocr-button" onclick="copyToClipboard()">Copy Text</button>
-            <a href="data:text/plain;charset=utf-8,{quoted_text}" download="extracted_text.txt" class="ocr-button">Download .txt</a>
+            <a href="data:text/plain;charset=utf-8,{extracted_text}" download="extracted_text.txt" class="ocr-button">Download .txt</a>
         </div>
     </div>
     <script>
         function copyToClipboard() {{
             const textToCopy = document.getElementById('ocrText').innerText;
             navigator.clipboard.writeText(textToCopy).then(() => {{
-                window.parent.postMessage({{
-                    streamlit: {{
-                        type: 'streamlit:setComponentValue',
-                        value: {{
-                            key: 'copied_success',
-                            value: true
-                        }}
-                    }}
-                }}, '*')
+                // Note: Communicating back to Streamlit requires a custom component.
+                // For a simple UI, a toast message is better handled by Streamlit itself.
+                // We'll just rely on the user seeing the toast.
             }}).catch(err => {{
                 console.error('Could not copy text: ', err);
             }});
         }}
     </script>
     """, unsafe_allow_html=True)
-    status_text.markdown('**Done!**')
+
     st.session_state.processing = False
     
-    if st.session_state.get('copied_success'):
-        st.toast("Text copied to clipboard!")
-        st.session_state.copied_success = False
-
 st.markdown("""
 <div style="text-align: center; margin-top: 1.5rem;">
     <p style="color:#444; font-size:0.8rem;">OCR-TECH - ADELEKE, OLADOKUN, OLALEYE</p>
@@ -651,6 +673,7 @@ st.markdown("""
         <span style="display:inline-flex; align-items:center; gap:5px; color:#444; font-size:0.8rem; font-weight: 500;">
             Github Repo- Praiztech
             <svg class="github-icon-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--!Font Awesome Free 6.5.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2024 Fonticons, Inc.--><path d="M165.9 397.4c0 2-2.3 4-4.9 4-2.7 0-4.9-2-4.9-4 0-2 2.3-4 4.9-4 2.7 0 4.9 2 4.9 4zm-14-100.2c.4 1.3.1 2.5-.6 3.5-.9 1.4-1.9 2.7-3.2 3.8-1.5 1.3-3.2 2.6-5 3.6-2.6 1.3-5.5 2.2-8.5 2.5-3.3 .4-6.6-.7-9.3-2.6-2.5-1.7-4.4-4.1-5.6-7-.9-2.2-1.3-4.5-1.4-6.8-2.1-4.9-1.9-9.8.5-14.7 1.5-2.8 3.5-5.5 5.9-7.8 1.9-1.8 4-3.5 6.2-5.1 2.3-1.6 4.7-3 7.2-4.1 2.3-1.2 4.9-2.2 7.6-2.7 2.3-.5 4.6-1.1 7-.9 2.5 .3 5 .8 7.3 1.9 2.1 .9 4.1 2.2 5.9 3.8 2.3 2.1 4.2 4.5 5.8 7.2 1.3 2 2.2 4.2 2.7 6.6 .5 2.4 .7 4.9 .5 7.4-.2 2.6-.8 5.1-1.7 7.5zm-51.5-7.4c.5 1.2.3 2.6-.5 3.8-.9 1.4-2.1 2.7-3.5 3.9-1.6 1.4-3.5 2.6-5.5 3.7-2.6 1.4-5.5 2.2-8.6 2.5-3.4 .4-6.8-.7-9.6-2.7-2.7-1.7-4.7-4.2-6-7.2-.9-2.3-1.3-4.8-1.4-7.2-2.3-5.2-2.2-10.4-.1-15.5 1.6-3 3.7-5.8 6.3-8.2 2.1-1.9 4.3-3.7 6.6-5.4 2.4-1.7 4.9-3.2 7.6-4.3 2.4-1.2 5.1-2.2 7.9-2.7 2.4-.5 4.9-1.1 7.4-.9 2.6 .3 5.2 .8 7.5 2 2.2 1 4.2 2.4 6 4 2.3 2.1 4.2 4.6 5.9 7.4 1.4 2.2 2.2 4.6 2.7 7.1 .5 2.5 .7 5 .5 7.6-.2 2.6-.8 5.1-1.8 7.5zm-5.1-47.5c.3 1.2 .1 2.4-.6 3.5-.9 1.4-2.1 2.7-3.4 3.9-1.5 1.4-3.3 2.6-5.2 3.6-2.4 1.2-5 1.9-7.8 2.1-3.1 .3-6.2-.7-8.8-2.4-2.4-1.6-4.2-3.9-5.4-6.6-.8-2-1.2-4.1-1.3-6.3-2-4.7-1.9-9.5 .4-14.2 1.4-2.7 3.3-5.2 5.6-7.4 1.8-1.7 3.8-3.3 5.9-4.9 2.2-1.6 4.6-3 7.1-4.1 2.2-1.1 4.6-2 7.1-2.5 2.1-.4 4.3-.9 6.5-.7 2.3 .2 4.6 .6 6.7 1.6 2 .9 3.9 2.2 5.6 3.7 2.2 2.1 4 4.5 5.5 7.1 1.2 2 2 4.1 2.5 6.3 .4 2.2 .6 4.5 .4 6.8-.2 2.2-.6 4.5-1.5 6.6zm-11.4 102c.4 2.1-.5 4.3-2.6 5.5-2.2 1.2-4.6 1.9-7.1 2.1-3.2 .3-6.4-.8-9.1-2.9-2.7-2.1-4.7-4.8-6.1-8-1.2-2.7-1.8-5.6-1.9-8.5-.8-5.3-.2-10.7 2.2-15.8 1.8-3.8 4.2-7.3 7-10.4 2.5-2.8 5.3-5.3 8.3-7.5 2.7-2 5.6-3.7 8.6-5.1 3-1.4 6.2-2.4 9.4-2.8 3.3-.4 6.7-.8 10-1.1 3.5-.3 7.1-.6 10.6-.2 3.7 .4 7.3 1.2 10.8 2.6 3.3 1.4 6.5 3.1 9.6 5.2 3.2 2.2 6.1 4.7 8.8 7.6 2.5 2.6 4.6 5.5 6.3 8.7 1.5 3.2 2.5 6.6 3.2 10.1 .7 3.4 .9 6.9 .6 10.4-.3 3.3-.8 6.7-1.7 9.9zm135-26.1c.5 1.2 .3 2.6-.5 3.8-.9 1.4-2.1 2.7-3.5 3.9-1.6 1.4-3.5 2.6-5.5 3.7-2.6 1.4-5.5 2.2-8.6 2.5-3.4 .4-6.8-.7-9.6-2.7-2.7-1.7-4.7-4.2-6-7.2-.9-2.3-1.3-4.8-1.4-7.2-2.3-5.2-2.2-10.4-.1-15.5 1.6-3 3.7-5.8 6.3-8.2 2.1-1.9 4.3-3.7 6.6-5.4 2.4-1.7 4.9-3.2 7.6-4.3 2.4-1.2 5.1-2.2 7.9-2.7 2.4-.5 4.9-1.1 7.4-.9 2.6 .3 5.2 .8 7.5 2 2.2 1 4.2 2.4 6 4 2.3 2.1 4.2 4.6 5.9 7.4 1.4 2.2 2.2 4.6 2.7 7.1 .5 2.5 .7 5 .5 7.6-.2 2.6-.8 5.1-1.8 7.5zm-5.1-47.5c.3 1.2 .1 2.4-.6 3.5-.9 1.4-2.1 2.7-3.4 3.9-1.5 1.4-3.3 2.6-5.2 3.6-2.4 1.2-5 1.9-7.8 2.1-3.1 .3-6.2-.7-8.8-2.4-2.4-1.6-4.2-3.9-5.4-6.6-.8-2-1.2-4.1-1.3-6.3-2-4.7-1.9-9.5 .4-14.2 1.4-2.7 3.3-5.2 5.6-7.4 1.8-1.7 3.8-3.3 5.9-4.9 2.2-1.6 4.6-3 7.1-4.1 2.2-1.1 4.6-2 7.1-2.5 2.1-.4 4.3-.9 6.5-.7 2.3 .2 4.6 .6 6.7 1.6 2 .9 3.9 2.2 5.6 3.7 2.2 2.1 4 4.5 5.5 7.1 1.2 2 2 4.1 2.5 6.3 .4 2.2 .6 4.5 .4 6.8-.2 2.2-.6 4.5-1.5 6.6zm114.2 60.1c.3 1.2 .1 2.4-.6 3.5-.9 1.4-2.1 2.7-3.4 3.9-1.5 1.4-3.3 2.6-5.2 3.6-2.4 1.2-5 1.9-7.8 2.1-3.1 .3-6.2-.7-8.8-2.4-2.4-1.6-4.2-3.9-5.4-6.6-.8-2-1.2-4.1-1.3-6.3-2-4.7-1.9-9.5 .4-14.2 1.4-2.7 3.3-5.2 5.6-7.4 1.8-1.7 3.8-3.3 5.9-4.9 2.2-1.6 4.6-3 7.1-4.1 2.2-1.1 4.6-2 7.1-2.5 2.1-.4 4.3-.9 6.5-.7 2.3 .2 4.6 .6 6.7 1.6 2 .9 3.9 2.2 5.6 3.7 2.2 2.1 4 4.5 5.5 7.1 1.2 2 2 4.1 2.5 6.3 .4 2.2 .6 4.5 .4 6.8-.2 2.2-.6 4.5-1.5 6.6zm-29.3 103.1c-1.4 1.2-3.2 2.2-5.1 3.1-2.2 1-4.6 1.5-7.1 1.5-2.7 0-5.3-.4-7.8-1.2-2.5-.8-4.9-2-7.1-3.6-2.2-1.5-4.2-3.3-5.9-5.3-1.6-2.1-2.8-4.5-3.7-7.1-.8-2.5-1.2-5.2-1.2-7.9 0-3.1 .5-6.2 1.5-9.1 1-2.9 2.3-5.7 3.9-8.2 1.7-2.6 3.6-5 5.7-7.2 2-2.1 4.2-3.9 6.6-5.4 2.4-1.5 4.9-2.7 7.6-3.6 2.5-.8 5.1-1.2 7.8-1.2 2.6 0 5.2 .4 7.7 1.2 2.5 .8 4.9 2 7.2 3.6 2.3 1.5 4.4 3.4 6.2 5.5 1.7 2.1 3 4.5 3.9 7.1 .8 2.6 1.2 5.2 1.2 8-.1 3.2-.5 6.3-1.6 9.3-1 2.9-2.3 5.7-4 8.2zm-28-144.1c-1.4 1.2-3.2 2.2-5.1 3.1-2.2 1-4.6 1.5-7.1 1.5-2.7 0-5.3-.4-7.8-1.2-2.5-.8-4.9-2-7.1-3.6-2.2-1.5-4.2-3.3-5.9-5.3-1.6-2.1-2.8-4.5-3.7-7.1-.8-2.5-1.2-5.2-1.2-7.9 0-3.1 .5-6.2 1.5-9.1 1-2.9 2.3-5.7 3.9-8.2 1.7-2.6 3.6-5 5.7-7.2 2-2.1 4.2-3.9 6.6-5.4 2.4-1.5 4.9-2.7 7.6-3.6 2.5-.8 5.1-1.2 7.8-1.2 2.6 0 5.2 .4 7.7 1.2 2.5 .8 4.9 2 7.2 3.6 2.3 1.5 4.4 3.4 6.2 5.5 1.7 2.1 3 4.5 3.9 7.1 .8 2.6 1.2 5.2 1.2 8-.1 3.2-.5 6.3-1.6 9.3-1 2.9-2.3 5.7-4 8.2zm23.4 216c-2.3 2.1-4.2 4.6-5.9 7.4-1.4 2.2-2.2 4.6-2.7 7.1-.5 2.5-.7 5-.5 7.6 .2 2.6 .8 5.1 1.8 7.5 1.3 3.1 3 5.7 5.1 8 2.1 2.2 4.6 4.1 7.4 5.9 2.8 1.8 5.7 3 8.8 3.9 3.1 .9 6.3 1.3 9.4 1.3 3.3 0 6.6-.4 9.8-1.3 3.2-.8 6.2-2.2 9.1-4 2.8-1.7 5.5-3.7 7.8-5.9 2.4-2.3 4.3-4.9 5.8-7.8 1.4-2.9 2.3-6.1 2.7-9.3 .4-3.2 .5-6.5 .1-9.7-.5-3.1-1.3-6.1-2.5-9-.9-2.1-2.2-4.1-3.7-6-1.4-1.8-3-3.4-4.8-4.9-1.9-1.5-3.9-2.8-6.1-3.9-2.2-1.1-4.6-2-7.1-2.5-2.5-.5-5.1-.7-7.6-.6-2.5 .1-5 .6-7.3 1.6-2.2 1-4.3 2.3-6.3 3.8zm11.3-88.7c.3 1.2 .1 2.4-.6 3.5-.9 1.4-2.1 2.7-3.4 3.9-1.5 1.4-3.3 2.6-5.2 3.6-2.4 1.2-5 1.9-7.8 2.1-3.1 .3-6.2-.7-8.8-2.4-2.4-1.6-4.2-3.9-5.4-6.6-.8-2-1.2-4.1-1.3-6.3-2-4.7-1.9-9.5 .4-14.2 1.4-2.7 3.3-5.2 5.6-7.4 1.8-1.7 3.8-3.3 5.9-4.9 2.2-1.6 4.6-3 7.1-4.1 2.2-1.1 4.6-2 7.1-2.5 2.1-.4 4.3-.9 6.5-.7 2.3 .2 4.6 .6 6.7 1.6 2 .9 3.9 2.2 5.6 3.7 2.2 2.1 4 4.5 5.5 7.1 1.2 2 2 4.1 2.5 6.3 .4 2.2 .6 4.5 .4 6.8-.2 2.2-.6 4.5-1.5 6.6zm-113.8 62.7c.4 1.3.1 2.5-.6 3.5-.9 1.4-1.9 2.7-3.2 3.8-1.5 1.3-3.2 2.6-5 3.6-2.6 1.3-5.5 2.2-8.5 2.5-3.3 .4-6.6-.7-9.3-2.6-2.5-1.7-4.4-4.1-5.6-7-.9-2.2-1.3-4.5-1.4-6.8-2.1-4.9-1.9-9.8.5-14.7 1.5-2.8 3.5-5.5 5.9-7.8 1.9-1.8 4-3.5 6.2-5.1 2.3-1.6 4.7-3 7.2-4.1 2.3-1.2 4.9-2.2 7.6-2.7 2.3-.5 4.6-1.1 7-.9 2.5 .3 5 .8 7.3 1.9 2.1 .9 4.1 2.2 5.9 3.8 2.3 2.1 4.2 4.5 5.8 7.2 1.3 2 2.2 4.2 2.7 6.6 .5 2.4 .7 4.9 .5 7.4-.2 2.6-.8 5.1-1.7 7.5zM248 8C111 8 0 119 0 256s111 248 248 248 248-111 248-248S385 8 248 8zm44.2 222.1c1.3 1.3 2.5 2.7 3.7 4.2 1.3 1.5 2.3 3.1 3.3 4.7 1.2 2 2 4.1 2.6 6.3 .7 2.2 1 4.5 1 6.8 0 3-.5 6-1.4 8.9-.9 2.8-2.2 5.5-3.8 8-1.6 2.6-3.4 5-5.6 7.2-2.2 2.1-4.6 3.9-7.1 5.4-2.5 1.5-5.1 2.7-7.8 3.6-2.7 .9-5.4 1.2-8.1 1.2-2.9 0-5.8-.4-8.7-1.4-3-.9-5.9-2.2-8.6-3.8-2.7-1.6-5.3-3.6-7.8-5.8-2.5-2.3-4.8-5-6.6-7.9-1.7-3-3-6.2-3.8-9.6-.8-3.4-1.2-6.9-1.1-10.4 .1-3.3 .7-6.6 1.7-9.9 1-3.2 2.4-6.2 4.1-9 1.5-2.5 3.4-4.8 5.6-6.9 2.1-2.1 4.5-3.9 7-5.4 2.5-1.5 5.1-2.6 7.8-3.5 2.7-.9 5.5-1.2 8.2-1.2 2.9 0 5.8 .4 8.7 1.4 3 .9 5.8 2.2 8.5 3.8 2.7 1.6 5.3 3.6 7.8 5.9 2.5 2.3 4.8 5.1 6.6 8.1 1.7 3 3 6.3 3.8 9.7 .8 3.4 1.2 6.9 1.1 10.4-.1 3.3-.7 6.6-1.8 9.9z"/></svg>
+        </span>
     </a>
 </div>
 """, unsafe_allow_html=True)

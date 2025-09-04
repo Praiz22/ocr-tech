@@ -18,6 +18,16 @@ from math import degrees
 # ----------------------------------------
 st.set_page_config(layout="wide", page_title="OCR-TECH", initial_sidebar_state="expanded")
 
+# IMPORTANT: Tesseract must be installed and in your system's PATH.
+# For Debian/Ubuntu: sudo apt-get install tesseract-ocr
+# For macOS: brew install tesseract
+# On Windows, download from: https://tesseract-ocr.github.io/tessdoc/Downloads.html
+# If not in PATH, uncomment the line below and set your specific path.
+# pytesseract.pytesseract.tesseract_cmd = r'/usr/bin/tesseract'
+
+# ----------------------------------------
+# CSS for glassmorphism and compact containers
+# ----------------------------------------
 st.markdown("""
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');

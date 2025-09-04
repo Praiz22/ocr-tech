@@ -1,18 +1,4 @@
-Certainly! Below is a complete, refined Streamlit OCR app script that incorporates all your requested features and improvements. It includes:
 
-- Dark text on transparent glass-effect cards.
-- File uploader inside the upload card with proper styling.
-- Subtle streak animation on the original image preview only.
-- Enhanced image preprocessing for better OCR accuracy.
-- Advanced text filtering to remove noise and gibberish.
-- Document classification with fallback to "Picture" if no meaningful text.
-- Copy and download buttons without underline and with user feedback.
-- Additional metrics displayed in a responsive grid.
-- Well-structured, modular code with comments.
-
-This script is self-contained and ready to run (assuming you have Tesseract OCR installed and configured).
-
-```python
 import streamlit as st
 import pytesseract
 from PIL import Image, ImageOps, ImageFilter, ImageEnhance

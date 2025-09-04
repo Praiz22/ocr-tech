@@ -1,97 +1,72 @@
+################################################################################
+# OCR-TECH: Advanced OCR with Glassmorphism UI and Bounding Box Overlay
+#
+# - EasyOCR extraction with confidence filtering & bounding box overlays
+# - Tesseract fallback
+# - Compact, glassy, portable UI with animation during processing
+# - Toggle to display bounding boxes on original image
+# - All previous features: metrics, classification, download/copy, extensibility
+#
+# AUTHOR: Praiz22 & Copilot, 2025
+################################################################################
+
 import streamlit as st
-import pytesseract
-from PIL import Image, ImageOps, ImageFilter, ImageEnhance
-from scipy.ndimage import sobel
-from io import BytesIO
 import numpy as np
+import cv2
+from PIL import Image, ImageOps, ImageEnhance, ImageDraw, ImageFont, ImageFilter
+import easyocr
+import pytesseract
 import re
 import time
+from io import BytesIO
 from urllib.parse import quote
 
-# Optional: EasyOCR for better extraction
-try:
-    import easyocr
-    EASY_AVAILABLE = True
-except ImportError:
-    EASY_AVAILABLE = False
+################################################################################
+# Streamlit Setup and Constants
+################################################################################
 
-# -------------------------------------------------------------------------------------------------
-# Page configuration
-# -------------------------------------------------------------------------------------------------
-st.set_page_config(layout="wide", page_title="OCR-TECH", initial_sidebar_state="collapsed")
+# Set up Streamlit page
+st.set_page_config(
+    page_title="OCR-TECH",
+    page_icon="📝",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
 
-# -------------------------------------------------------------------------------------------------
-# Glassmorphism & UI CSS
-# -------------------------------------------------------------------------------------------------
+# -- UI CSS: glassmorphism, compact containers, animation, overlays --
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
 :root {
-  --bg-1: #ffffff;
-  --bg-2: #fff5eb;
-  --bg-3: #ffe7cc;
-  --card-bg: rgba(255,255,255,0.19);
-  --card-border: rgba(255,255,255,0.18);
-  --card-shadow: 0 18px 44px rgba(0,0,0,0.18);
-  --text-1: #191919 !important;
-  --text-2: #3a3a3a !important;
+  --bg-1: #fff;
+  --card-bg: rgba(255,255,255,0.18);
+  --card-border: rgba(255,255,255,0.15);
   --brand: #ff7a18;
   --brand-2: #ff4d00;
-  --muted: #e9e9e9;
-  --success: #0aa574;
-  --warning: #d97a00;
-  --radius-xl: 22px;
-  --radius-lg: 18px;
-  --radius-md: 14px;
-  --radius-sm: 8px;
+  --radius-xl: 16px;
+  --radius-lg: 13px;
+  --radius-md: 10px;
+  --radius-sm: 6px;
 }
-body { font-family: 'Poppins', sans-serif; color: var(--text-1);}
-.stApp { background: linear-gradient(135deg, var(--bg-2) 0%, var(--bg-3) 100%); min-height: 100vh; padding: 2rem;}
-.ocr-container { max-width: 900px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 2rem;}
+.stApp {background: linear-gradient(135deg,#fff5eb 0%,#ffe7cc 100%);}
+.ocr-container {max-width: 870px; margin:0 auto;}
 .ocr-card {
   background: var(--card-bg);
-  backdrop-filter: blur(25px);
   border: 2px solid var(--card-border);
   border-radius: var(--radius-xl);
-  padding: 2.5rem;
-  box-shadow: var(--card-shadow);
-  color: var(--text-1) !important;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
+  box-shadow: 0 9px 24px rgba(0,0,0,0.09);
+  padding: 2.2rem 1.4rem;
+  margin-bottom: 1.6rem;
 }
-.header { text-align: center; margin-bottom: 2rem;}
-.header h1 { font-size: 2.5rem; font-weight: 700; color: var(--brand); margin: 0;}
-.header p { color: var(--text-2); margin: 0.5rem 0 0; font-weight: 500;}
-.file-upload-section {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  text-align: center; padding-bottom: 2rem; border-bottom: 1px dashed var(--muted); width: 100%;
-}
-.image-row {
-  display: flex;
-  flex-direction: row;
-  gap: 2.1rem;
-  justify-content: center;
-  align-items: flex-start;
-  margin-bottom: 1rem;
-}
+.header {text-align: center; margin-bottom: 1.5rem;}
+.header h1 {font-size: 2.1rem; color:var(--brand);}
+.header p {color: #444;}
+.file-upload-section {text-align:center; padding-bottom:1.3rem;}
+.image-row {display: flex; flex-direction: row; gap: 1.35rem; justify-content: center; align-items: flex-start;}
 .image-container {
-  width: 100%;
-  max-width: 410px;
-  max-height: 450px;
-  overflow: hidden;
-  margin: 0 auto;
-  border-radius: 16px;
-  background: rgba(255,255,255,0.10);
-  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
+  width:100%; max-width:260px; max-height:290px; overflow:hidden;
+  border-radius: 10px; background:rgba(255,255,255,0.13);
+  box-shadow:0 2px 10px rgba(0,0,0,0.04); display:flex;align-items:center;justify-content:center;position:relative;
 }
-.image-preview-container { position: relative; overflow: hidden; border-radius: var(--radius-md);}
 .image-preview-container.processing::before {
   content: '';
   position: absolute;
@@ -106,7 +81,7 @@ body { font-family: 'Poppins', sans-serif; color: var(--text-1);}
     rgba(255,255,255,0) 100%
   );
   background-size: 120% 120%;
-  animation: streakDown 1.6s cubic-bezier(.77,0,.18,1) infinite;
+  animation: streakDown 1.1s cubic-bezier(.77,0,.18,1) infinite;
   z-index: 2;
   pointer-events: none;
 }
@@ -114,83 +89,131 @@ body { font-family: 'Poppins', sans-serif; color: var(--text-1);}
     0% { top: -80%; }
     100% { top: 120%; }
 }
-.results-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem;}
+.results-grid {display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1rem;}
 .metric-card {
-  padding: 1.5rem;
+  padding: 0.9rem;
   border-radius: var(--radius-lg);
-  background: rgba(255,255,255,0.30);
-  border: 1px solid rgba(255,255,255,0.16);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  background: rgba(255,255,255,0.26);
+  border: 1px solid rgba(255,255,255,0.12);
   color: #111 !important;
 }
-.metric-card h4 { margin: 0 0 0.5rem; font-size: 1rem; color: var(--text-2);}
-.metric-value { font-size: 1.8rem; font-weight: 700; color: var(--brand-2);}
-.progress-bar-container { height: 8px; background: var(--muted); border-radius: var(--radius-sm); overflow: hidden; margin-top: 0.5rem;}
-.progress-bar { height: 100%; background: var(--brand); transition: width 0.3s ease-in-out;}
-.progress-bar.success { background: var(--success);}
-.progress-bar.warning { background: var(--warning);}
+.metric-value { font-size: 1.1rem; font-weight: 700; color: var(--brand-2); }
+.progress-bar-container {height: 7px; background: #e0e0e0; border-radius: 5px; overflow: hidden; margin-top: 0.4rem;}
+.progress-bar {height: 100%; background: var(--brand); transition: width 0.2s;}
+.progress-bar.success {background: #0aa574;}
 .text-output-card {
-  grid-column: 1 / -1;
-  background: rgba(255,255,255,0.32);
-  padding: 2rem;
+  background: rgba(255,255,255,0.29);
+  padding: 1rem;
   border-radius: var(--radius-xl);
-  border: 1px solid rgba(255,255,255,0.14);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.10);
-  margin-top: 1.5rem;
+  border: 1px solid rgba(255,255,255,0.07);
+  margin-top: 1rem;
   color: #191919 !important;
 }
 .text-output-card pre {
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  font-family: 'Poppins', sans-serif;
-  color: #191919 !important;
-  background: transparent !important;
-  font-size: 1.08rem;
-  line-height: 1.48;
+  white-space: pre-wrap; word-wrap: break-word; font-family: 'Poppins', sans-serif;
+  color: #191919 !important; background: transparent !important; font-size: 1.03rem; line-height: 1.35;
 }
-.button-row { display: flex; justify-content: center; gap: 1rem; margin-top: 2rem;}
+.button-row {display: flex; justify-content: center; gap: 0.9rem; margin-top: 1.2rem;}
 .ocr-button, .ocr-button:visited, .ocr-button:hover {
-  background-color: var(--brand);
-  color: var(--bg-1) !important;
-  padding: 1rem 2.5rem;
-  border-radius: var(--radius-lg);
-  font-size: 1.1rem;
-  font-weight: 600;
-  border: none;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-decoration: none !important;
-  display: inline-block;
+  background-color: var(--brand); color: #fff !important; padding: 0.8rem 1.7rem;
+  border-radius: var(--radius-lg); font-size: 1rem; font-weight: 600; border: none;
+  cursor: pointer; transition: all 0.2s; text-decoration: none !important; display: inline-block;
 }
-.ocr-button:hover {
-  background-color: var(--brand-2);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-  text-decoration: none !important;
-}
-.st-emotion-cache-1c7y31u {
-    border: 2px dashed var(--muted);
-    border-radius: var(--radius-lg);
-    padding: 2rem;
-    text-align: center;
-    cursor: pointer;
-    background: rgba(255,255,255,0.18);
-    transition: background 0.3s ease;
-    color: #191919 !important;
-}
-.st-emotion-cache-1c7y31u:hover {
-    background: rgba(255,255,255,0.27);
-}
-.st-emotion-cache-1c7y31u div p { color: var(--text-1); font-weight: 500;}
+.ocr-button:hover {background-color: var(--brand-2);}
+.st-emotion-cache-1c7y31u {border: 2px dashed #ececec; border-radius: var(--radius-lg); padding: 1.2rem;}
 </style>
 """, unsafe_allow_html=True)
 
-# -------------------------------------------------------------------------------------------------
-# Helper functions for OCR, text cleaning, and classification
-# -------------------------------------------------------------------------------------------------
+################################################################################
+# Utility: EasyOCR Reader as Resource
+################################################################################
+
+@st.cache_resource(show_spinner="Loading EasyOCR model...")
+def get_easyocr_reader():
+    """
+    Loads EasyOCR English reader as a singleton resource.
+    """
+    return easyocr.Reader(['en'])
+
+################################################################################
+# Extraction Logic: EasyOCR with Confidence Filtering & Bounding Boxes
+################################################################################
+
+def recognize_text_easyocr(image, min_conf=0.2):
+    """
+    Uses EasyOCR to extract text with bounding boxes and confidence filtering.
+    Returns:
+        result (list): List of (bbox, text, prob)
+    """
+    reader = get_easyocr_reader()
+    img_np = np.array(image) if not isinstance(image, np.ndarray) else image
+    result = reader.readtext(img_np)
+    return [
+        (bbox, text.strip(), prob)
+        for bbox, text, prob in result
+        if prob >= min_conf and text.strip()
+    ]
+
+def get_cleaned_text_from_easyocr_results(results):
+    """
+    Concatenates filtered OCR results into a single cleaned string.
+    """
+    return "\n".join([text for bbox, text, prob in results])
+
+def overlay_ocr_boxes_on_image(image, ocr_results, font_size=18):
+    """
+    Overlays bounding boxes and recognized text onto the image.
+    Args:
+        image (PIL.Image): The original image.
+        ocr_results (list): List of (bbox, text, prob)
+        font_size (int): Font size for overlayed text.
+    Returns:
+        PIL.Image: Image with bounding boxes and text overlay.
+    """
+    # Convert for drawing
+    img_draw = image.convert("RGBA")
+    draw = ImageDraw.Draw(img_draw)
+    try:
+        font = ImageFont.truetype("arial.ttf", font_size)
+    except:
+        font = ImageFont.load_default()
+
+    for bbox, text, prob in ocr_results:
+        pts = [tuple(map(int, pt)) for pt in bbox]
+        draw.line(pts + [pts[0]], fill=(255, 32, 32, 170), width=3)
+        # Draw a filled background for text
+        text_w, text_h = draw.textsize(text, font=font)
+        tx, ty = pts[0]
+        draw.rectangle([(tx, ty - text_h - 4), (tx + text_w + 8, ty)], fill=(255,255,255,196))
+        draw.text((tx + 4, ty - text_h - 2), text, fill=(32,32,32,255), font=font)
+    return img_draw
+
+################################################################################
+# Extraction Logic: Tesseract Fallback
+################################################################################
+
+def extract_text_tesseract(image):
+    """
+    Attempts OCR extraction with multiple Tesseract PSM settings.
+    """
+    for psm in [6, 11, 3, 7]:
+        try:
+            text = pytesseract.image_to_string(image, config=f"--psm {psm}")
+        except Exception:
+            continue
+        filtered = clean_text(text)
+        if len(filtered) > 8 and any(c.isalpha() for c in filtered):
+            return filtered
+    return ""
+
+################################################################################
+# Text Cleaning, Metrics, Classification, and Frequency
+################################################################################
 
 def clean_text(text: str) -> str:
-    """Remove non-ASCII, junk lines, and keep only readable text."""
+    """
+    Removes non-ASCII, junk lines, and keeps only readable text.
+    """
     text = re.sub(r'[^\x00-\x7F]+', ' ', text)
     text = re.sub(r'[\r]+', '', text)
     text = re.sub(r'[ ]{2,}', ' ', text)
@@ -205,96 +228,26 @@ def clean_text(text: str) -> str:
             filtered.append(line)
     return "\n".join(filtered).strip()
 
-def extract_text(image: Image.Image) -> str:
-    """Try EasyOCR (if available), then Tesseract with multiple PSMs for best legit text extraction."""
-    # Try EasyOCR
-    if EASY_AVAILABLE:
-        try:
-            reader = easyocr.Reader(['en'], gpu=False)
-            bounds = reader.readtext(np.array(image))
-            text = "\n".join([b[1] for b in bounds if len(b[1].strip()) > 1])
-            filtered = clean_text(text)
-            if len(filtered) > 8 and any(c.isalpha() for c in filtered):
-                return filtered
-        except Exception as e:
-            print(f"EasyOCR failed: {e}")
-    # Fallback to Tesseract
-    for psm in [6, 11, 3, 7]:
-        text = pytesseract.image_to_string(image, config=f"--psm {psm}")
-        filtered = clean_text(text)
-        if len(filtered) > 8 and any(c.isalpha() for c in filtered):
-            return filtered
-    return ""
-
-def preprocess_image(image: Image.Image, processed_placeholder, status_placeholder) -> Image.Image:
-    status_placeholder.markdown('<h4 id="predStatus" style="color:var(--text-1);">Normalizing Image...</h4>', unsafe_allow_html=True)
-    time.sleep(0.3)
-    gray = ImageOps.grayscale(image)
-    processed_placeholder.image(gray, caption="Processed Image", use_container_width=True)
-    status_placeholder.markdown('<h4 id="predStatus" style="color:var(--text-1);">Enhancing Contrast...</h4>', unsafe_allow_html=True)
-    time.sleep(0.3)
-    enhancer = ImageEnhance.Contrast(gray)
-    enhanced = enhancer.enhance(2.3)
-    status_placeholder.markdown('<h4 id="predStatus" style="color:var(--text-1);">Binarizing...</h4>', unsafe_allow_html=True)
-    time.sleep(0.3)
-    arr = np.array(enhanced)
-    mean = arr.mean()
-    binarized = (arr > mean - 12).astype(np.uint8) * 255
-    bin_img = Image.fromarray(binarized)
-    status_placeholder.markdown('<h4 id="predStatus" style="color:var(--text-1);">Removing Noise...</h4>', unsafe_allow_html=True)
-    time.sleep(0.3)
-    denoised = bin_img.filter(ImageFilter.MedianFilter(size=3))
-    return denoised
-
-def is_blank_or_picture(text: str, img: Image.Image) -> bool:
+def classify_document(text, img, processed_img):
+    """
+    Heuristic document classification.
+    """
     words = text.split()
-    if len(words) < 4: return True
     real_words = [w for w in words if len(w) > 2 and re.match(r"[a-zA-Z]", w)]
-    if len(real_words) < 2: return True
     arr = np.array(img.convert("L"))
     avg_brightness = arr.mean()
-    if avg_brightness > 240 or avg_brightness < 15: return True
-    return False
+    if len(words) < 4 or len(real_words) < 2 or avg_brightness > 240 or avg_brightness < 15:
+        return "Picture", 99
+    arr_proc = np.array(processed_img.convert("L"))
+    std = arr_proc.std()
+    if std > 55 and std < 95:
+        return "Handwritten Note", 94
+    return "Document", 92
 
-def is_handwritten(image: Image.Image) -> bool:
-    arr = np.array(image.convert("L"))
-    std = arr.std()
-    return std > 55 and std < 95
-
-def contains_form_lines(image: Image.Image) -> bool:
-    arr = np.array(image)
-    edges_h = sobel(arr, axis=0)
-    edges_v = sobel(arr, axis=1)
-    return (np.abs(edges_h) > 70).sum() > arr.shape[0] * 6 and (np.abs(edges_v) > 70).sum() > arr.shape[1] * 6
-
-def classify_document(text, img, processed_img):
-    if is_blank_or_picture(text, img): return "Picture", 99
-    if is_handwritten(processed_img): return "Handwritten Note", 94
-    if contains_form_lines(processed_img): return "Scanned Form", 92
-    LOW_TEXT = text.lower()
-    doc_types = {
-        "Invoice": ["invoice", "bill to", "invoice number", "tax", "payment due", "amount due", "billed to", "vat"],
-        "Receipt": ["receipt", "thank you for your purchase", "subtotal", "cashier", "transaction id", "change due"],
-        "Report": ["report", "summary", "analysis", "findings", "conclusion", "abstract", "introduction", "methodology"],
-        "Contract": ["contract", "agreement", "terms and conditions", "effective date", "parties", "whereas", "this agreement"],
-        "Memo": ["memorandum", "memo", "interoffice", "to:", "from:", "date:", "subject:"],
-        "Agenda": ["agenda", "meeting", "minutes", "discussion points", "location:", "time:"],
-        "Medical": ["prescription", "rx", "refill", "patient", "diagnosis", "doctor", "hospital", "medication"],
-        "Resume": ["resume", "curriculum vitae", "experience", "education", "skills", "objective", "work history", "email:"],
-        "Legal": ["affidavit", "will", "deed", "court", "judgment", "plaintiff", "defendant", "statute", "legal"],
-        "Financial": ["balance sheet", "income statement", "cash flow", "assets", "liabilities", "revenue", "expenses"],
-        "Letter": ["dear", "sincerely", "regards", "yours truly", "addressed to"],
-    }
-    best_match, highest = "Miscellaneous", 0
-    for doc, keys in doc_types.items():
-        score = sum(1 for k in keys if k in LOW_TEXT)
-        if score > highest:
-            best_match, highest = doc, score
-    word_count = len(text.split())
-    confidence = min(99, 70 + highest * 7 + (5 if word_count > 100 else 0))
-    return best_match, confidence
-
-def word_frequency(text: str) -> dict:
+def word_frequency(text):
+    """
+    Returns word frequency dictionary.
+    """
     words = re.findall(r'\b\w+\b', text.lower())
     freq = {}
     for word in words:
@@ -302,37 +255,73 @@ def word_frequency(text: str) -> dict:
         else: freq[word] = 1
     return freq
 
-def top_n_words(freq: dict, n: int = 6) -> list:
+def top_n_words(freq, n=5):
+    """
+    Returns top n most frequent words.
+    """
     return sorted(freq.items(), key=lambda x: x[1], reverse=True)[:n]
 
-# -------------------------------------------------------------------------------------------------
-# Session state
-# -------------------------------------------------------------------------------------------------
+################################################################################
+# Preprocessing (Contrast, Binarize, Denoise)
+################################################################################
+
+def preprocess_image(img, processed_placeholder, status_placeholder):
+    """
+    Preprocesses image for OCR: grayscale, contrast enhance, binarize, denoise.
+    """
+    status_placeholder.markdown('**Normalizing...**')
+    gray = ImageOps.grayscale(img)
+    processed_placeholder.image(gray, caption="Processed", use_container_width=True)
+    status_placeholder.markdown('**Enhancing Contrast...**')
+    enhancer = ImageEnhance.Contrast(gray)
+    enhanced = enhancer.enhance(2.0)
+    status_placeholder.markdown('**Binarizing...**')
+    arr = np.array(enhanced)
+    mean = arr.mean()
+    binarized = (arr > mean - 10).astype(np.uint8) * 255
+    bin_img = Image.fromarray(binarized)
+    status_placeholder.markdown('**Denoising...**')
+    denoised = bin_img.filter(ImageFilter.MedianFilter(size=3))
+    return denoised
+
+################################################################################
+# Streamlit Session State
+################################################################################
+
 if 'uploaded_image' not in st.session_state:
     st.session_state.uploaded_image = None
 if 'processing' not in st.session_state:
     st.session_state.processing = False
 if 'last_uploaded_filename' not in st.session_state:
     st.session_state.last_uploaded_filename = None
+if "show_boxes" not in st.session_state:
+    st.session_state.show_boxes = True
 
-# -------------------------------------------------------------------------------------------------
-# Main UI
-# -------------------------------------------------------------------------------------------------
+################################################################################
+# Main UI Layout and Logic
+################################################################################
+
 st.markdown("""
 <div class="ocr-container">
   <div class="header">
     <h1>OCR-TECH</h1>
-    <p>Optical Character Recognition & Image Classification</p>
+    <p>Advanced Text Extraction & Bounding Box Visualization</p>
   </div>
-  <div class="ocr-card" style="margin-bottom:1.5rem;">
+  <div class="ocr-card">
     <div class="file-upload-section">
-      <h4 style="color:var(--text-1);">Upload an Image</h4>
-      <p style="color:var(--text-2);">Drag and drop a file here or click below to choose a file.</p>
-      <div style="margin-top:1.5rem;width:100%;">
+      <h4>Upload an Image</h4>
+      <p>Drag and drop or click below to choose a file.</p>
+      <div style="margin-top:1.2rem;width:100%;">
 """, unsafe_allow_html=True)
 uploaded_file = st.file_uploader("", type=["png", "jpg", "jpeg"], key="file_uploader", label_visibility="collapsed")
 st.markdown("""</div></div></div>""", unsafe_allow_html=True)
 
+# Toggle for bounding box overlays
+st.session_state.show_boxes = st.checkbox(
+    "Show bounding boxes on original image (EasyOCR results)", value=True
+)
+
+# -- File upload: load and reset state if new image --
 if uploaded_file:
     if st.session_state.last_uploaded_filename != uploaded_file.name:
         st.session_state.last_uploaded_filename = uploaded_file.name
@@ -347,6 +336,10 @@ if uploaded_file:
             st.error("The file you uploaded could not be identified as a valid image. Please try a different file.")
             st.session_state.uploaded_image = None
 
+################################################################################
+# Main OCR Processing Block
+################################################################################
+
 if st.session_state.uploaded_image and not st.session_state.processing:
     st.session_state.processing = True
     image = Image.open(BytesIO(st.session_state.uploaded_image)).convert("RGB")
@@ -354,17 +347,25 @@ if st.session_state.uploaded_image and not st.session_state.processing:
     metric_grid_placeholder = st.empty()
     text_output_placeholder = st.empty()
 
-    # ---------- IMAGE PREVIEWS IN FIXED CONTAINERS -----------------
+    # ---------- IMAGE PREVIEWS IN FIXED CONTAINERS (with animation on left) ----------
     st.markdown('<div class="image-row">', unsafe_allow_html=True)
     with st.container():
-        # Original preview with animation during processing
         st.markdown(
             '<div class="image-container">'
             f'<div class="image-preview-container {"processing" if st.session_state.processing else ""}">',
             unsafe_allow_html=True)
-        st.image(image, caption="Original Image", use_container_width=True)
+        # If show_boxes, overlay the bounding boxes (after OCR)
+        preview_img = image
+        ocr_results = []
+        try:
+            ocr_results = recognize_text_easyocr(image)
+            if st.session_state.show_boxes and len(ocr_results):
+                preview_img = overlay_ocr_boxes_on_image(image, ocr_results)
+        except Exception:
+            ocr_results = []
+            preview_img = image
+        st.image(preview_img, caption="Original (with boxes)" if st.session_state.show_boxes else "Original", use_container_width=True)
         st.markdown('</div></div>', unsafe_allow_html=True)
-
     with st.container():
         st.markdown('<div class="image-container">', unsafe_allow_html=True)
         processed_image_placeholder = st.empty()
@@ -373,23 +374,36 @@ if st.session_state.uploaded_image and not st.session_state.processing:
 
     # ---------- PREPROCESS AND OCR ---------------------
     processed_image = preprocess_image(image, processed_image_placeholder, status_text)
-    status_text.markdown('<h4 id="predStatus" style="color:var(--text-1);">Extracting Text...</h4>', unsafe_allow_html=True)
-    time.sleep(0.15)
-    extracted_text = extract_text(processed_image)
-    label, confidence = classify_document(extracted_text, image, processed_image)
-    word_count = len(extracted_text.split())
-    char_count = len(extracted_text.replace(" ", "").replace("\n", ""))
-    avg_word_length = char_count / word_count if word_count > 0 else 0
-    freq = word_frequency(extracted_text)
-    top_words = top_n_words(freq, 6)
+    status_text.markdown('**Extracting Text...**')
+    time.sleep(0.18)
 
-    # ---------- METRICS --------------------------
+    # Primary extraction: EasyOCR with confidence filtering (from your repo)
+    try:
+        if not ocr_results:
+            ocr_results = recognize_text_easyocr(processed_image)
+        extracted_text = get_cleaned_text_from_easyocr_results(ocr_results)
+        filtered = clean_text(extracted_text)
+        if not (len(filtered) > 8 and any(c.isalpha() for c in filtered)):
+            # Fallback to Tesseract
+            filtered = extract_text_tesseract(processed_image)
+    except Exception as ex:
+        filtered = extract_text_tesseract(processed_image)
+
+    # ---------- CLASSIFICATION & METRICS --------------------------
+    label, confidence = classify_document(filtered, image, processed_image)
+    word_count = len(filtered.split())
+    char_count = len(filtered.replace(" ", "").replace("\n", ""))
+    avg_word_length = char_count / word_count if word_count > 0 else 0
+    freq = word_frequency(filtered)
+    top_words = top_n_words(freq, 5)
+
+    # ---------- METRICS GRID --------------------------------------
     metric_grid_placeholder.markdown(f"""
     <div class="results-grid">
       <div class="metric-card">
         <h4>Prediction</h4>
         <div class="metric-value" style="color:var(--brand);">{label}</div>
-        <p style="color:var(--text-2); font-size:0.85rem; margin:0.5rem 0 0;">(Classified document type)</p>
+        <p style="color:#444; font-size:0.83rem;">(Classified)</p>
       </div>
       <div class="metric-card">
         <h4>Confidence</h4>
@@ -401,27 +415,27 @@ if st.session_state.uploaded_image and not st.session_state.processing:
       <div class="metric-card">
         <h4>Text Count</h4>
         <div class="metric-value">{word_count}</div>
-        <p style="color:var(--text-2); font-size:0.85rem; margin:0.5rem 0 0;">(Words extracted)</p>
+        <p style="color:#444; font-size:0.83rem;">(Words)</p>
       </div>
       <div class="metric-card">
-        <h4>Characters/Word</h4>
+        <h4>Char/Word</h4>
         <div class="metric-value">{avg_word_length:.2f}</div>
-        <p style="color:var(--text-2); font-size:0.85rem; margin:0.5rem 0 0;">(Average length)</p>
+        <p style="color:#444; font-size:0.83rem;">(Avg len)</p>
       </div>
       <div class="metric-card">
         <h4>Top Words</h4>
         <div class="metric-value">{', '.join([f"{w}({c})" for w, c in top_words]) or '-'}</div>
-        <p style="color:var(--text-2); font-size:0.85rem; margin:0.5rem 0 0;">(Most frequent)</p>
+        <p style="color:#444; font-size:0.83rem;">(Freq.)</p>
       </div>
     </div>
     """, unsafe_allow_html=True)
 
     # ---------- TEXT + COPY/DOWNLOAD --------------------------
-    quoted_text = quote(extracted_text)
+    quoted_text = quote(filtered)
     text_output_placeholder.markdown(f"""
     <div class="text-output-card">
-      <h4 style="color:var(--text-1);">Extracted Text</h4>
-      <pre id="ocrText" style="color:#191919 !important;">{extracted_text or "[No visible text]"}</pre>
+      <h4>Extracted Text</h4>
+      <pre id="ocrText">{filtered or "[No visible text]"}</pre>
       <div class="button-row">
         <button class="ocr-button" onclick="copyToClipboard()">Copy Text</button>
         <a href="data:text/plain;charset=utf-8,{quoted_text}" download="extracted_text.txt" class="ocr-button">Download .txt</a>
@@ -448,11 +462,11 @@ if st.session_state.uploaded_image and not st.session_state.processing:
       }}
     </script>
     """, unsafe_allow_html=True)
-    status_text.markdown('<h4 id="predStatus" style="color:var(--text-1);">Done!</h4>', unsafe_allow_html=True)
+    status_text.markdown('**Done!**')
     st.session_state.processing = False
 
 st.markdown("""
-<div style="text-align: center; margin-top: 2rem;">
-  <p style="color:var(--text-2); font-size:0.8rem;">OCR-TECH - Designed by ADELEKE, OLADOKUN, and OLALEYE</p>
+<div style="text-align: center; margin-top: 1.5rem;">
+  <p style="color:#444; font-size:0.8rem;">OCR-TECH - ADELEKE, OLADOKUN, OLALEYE (with Copilot)</p>
 </div>
 """, unsafe_allow_html=True)

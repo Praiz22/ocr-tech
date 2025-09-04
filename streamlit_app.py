@@ -17,6 +17,17 @@ from math import degrees
 # PAGE & GLOBALS
 # ----------------------------------------
 st.set_page_config(layout="wide", page_title="OCR-TECH", initial_sidebar_state="expanded")
+
+# IMPORTANT: Tesseract must be installed and in your system's PATH.
+# For Debian/Ubuntu: sudo apt-get install tesseract-ocr
+# For macOS: brew install tesseract
+# On Windows, download from: https://tesseract-ocr.github.io/tessdoc/Downloads.html
+# If not in PATH, uncomment the line below and set your specific path.
+# pytesseract.pytesseract.tesseract_cmd = r'/usr/bin/tesseract'
+
+# ----------------------------------------
+# CSS for glassmorphism and compact containers
+# ----------------------------------------
 st.markdown("""
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
@@ -29,7 +40,7 @@ st.markdown("""
     --card-border: rgba(255, 255, 255, 0.2); /* VERY transparent */
     --card-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
     --text-1: #1f1f1f; /* Darkest text */
-    --text-2: #F0F0F0; 
+    --text-2: #5a5a5a; /* Slightly lighter dark text */
     --brand: #ff7a18;
     --brand-2: #ff4d00;
     --muted: #e9e9e9;
@@ -98,6 +109,31 @@ st.markdown("""
     border-bottom: 1px dashed var(--muted);
   }
   
+  /* Styling for the larger file uploader container */
+  .st-emotion-cache-1h50xby {
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-xl);
+      padding: 3rem; /* Increased padding */
+      box-shadow: var(--card-shadow);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 250px; /* Make the box taller */
+  }
+  
+  .st-emotion-cache-1h50xby:hover {
+      border-color: var(--brand);
+  }
+
+  /* Text inside the file uploader */
+  .st-emotion-cache-1h50xby p, 
+  .st-emotion-cache-1h50xby h5 {
+      color: var(--text-1) !important;
+  }
+
   .image-row {
     display: flex;
     flex-direction: row;
@@ -494,7 +530,7 @@ st.sidebar.header("OCR Settings")
 st.sidebar.markdown("Configure your OCR extraction preferences.")
 
 # Added 'yo' for Yoruba
-available_langs = ['en', 'ar', 'ru', 'ch_sim', 'ja', 'yo'] 
+available_langs = ['en', 'ar', 'ru', 'ch_sim', 'ja', 'yo']
 selected_langs = st.sidebar.multiselect(
     'Select language(s) for OCR',
     options=available_langs,
@@ -539,13 +575,18 @@ st.markdown("""
         <p>Better Text Extraction from Images (Powered by EasyOCR)</p>
     </div>
     <div class="ocr-card">
-        <div class="file-upload-section">
-            <h4>Upload an Image</h4>
-            <p>Drag and drop or click below to choose a file.</p>
-            <div style="margin-top:1.2rem;width:100%;">
+        <div style="text-align: center;">
+            <h4 style="color: var(--text-1) !important;">Upload an Image</h4>
+            <p style="color: var(--text-2) !important; font-weight: 500;">Drag and drop a file or click below to choose a file.</p>
+        </div>
+        <div style="margin-top:1.5rem;">
 """, unsafe_allow_html=True)
 uploaded_file = st.file_uploader("", type=["png", "jpg", "jpeg"], key="file_uploader", label_visibility="collapsed")
-st.markdown("""</div></div></div>""", unsafe_allow_html=True)
+st.markdown("""
+        </div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
 if uploaded_file:
     if st.session_state.last_uploaded_filename != uploaded_file.name:
@@ -569,7 +610,7 @@ if st.session_state.uploaded_image:
             <div style="display: flex; flex-direction: column; height: 100%; justify-content: space-between;">
                 <div>
                     <h4 style="color: var(--text-1) !important;">Ready to process?</h4>
-                    <p style="color: var(--text-2) !important;">Review the settings in the sidebar and press the button below to begin the OCR process.</p>
+                    <p style="color: var(--text-1) !important;">Review the settings in the sidebar and press the button below to begin the OCR process.</p>
                 </div>
                 <div style="display:flex; justify-content:center; padding-top:1rem;">
             """, unsafe_allow_html=True)

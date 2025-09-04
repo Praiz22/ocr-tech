@@ -9,10 +9,9 @@ import time
 import base64
 from urllib.parse import quote
 from io import BytesIO
-from skimage.transform import rotate, probabilistic_hough_line, hough_line, hough_circle
+from skimage.transform import rotate, probabilistic_hough_line, hough_line
 from skimage.feature import canny
-from skimage.draw import line, circle
-from math import degrees, atan2, pi
+from math import degrees
 
 # ----------------------------------------
 # PAGE & GLOBALS
@@ -266,11 +265,6 @@ st.markdown("""
   }
   .st-emotion-cache-1c7y31u:hover {
       background: rgba(255, 255, 255, 0.3);
-  }
-
-  .st-emotion-cache-1c7y31u div p {
-      color: var(--text-1) !important;
-      font-weight: 500;
   }
 
   .st-emotion-cache-1869e5d div p {

@@ -14,7 +14,7 @@ from io import BytesIO
 # PAGE & GLOBALS
 # ----------------------------------------
 # Set Streamlit to use a wide layout and a custom title.
-st.set_page_config(layout="wide", page_title="OCR-TECH", initial_sidebar_state="collapsed")
+st.set_page_config(layout="wide", page_title="OCR-TECH", initial_sidebar_state="expanded")
 
 # ----------------------------------------
 # CSS for glassmorphism and compact containers
@@ -281,26 +281,24 @@ st.markdown("""
   .github-link:hover .github-icon-svg {
     transform: rotate(360deg);
   }
-
 </style>
 """, unsafe_allow_html=True)
 
 # Set the path to the Tesseract executable.
-# You might need to change this line depending on your setup.
 # pytesseract.pytesseract.tesseract_cmd = r'/usr/bin/tesseract'
 
 # ----------------------------------------
 # OCR Extraction Logic (using EasyOCR & Tesseract)
 # ----------------------------------------
+@st.cache_resource(show_spinner=False)
+def get_easyocr_reader(lang_list):
+    """Caches the EasyOCR reader with a specific language list."""
+    # This prevents reloading the model every time the page refreshes
+    return easyocr.Reader(lang_list)
 
-@st.cache_resource(show_spinner="Loading EasyOCR model...")
-def get_easyocr_reader():
-    """Caches the EasyOCR reader to avoid reloading on each run."""
-    return easyocr.Reader(['en'])
-
-def recognize_text_easyocr(image, min_conf=0.2):
+def recognize_text_easyocr(image, langs, min_conf=0.2):
     """Uses EasyOCR to recognize text with a minimum confidence threshold."""
-    reader = get_easyocr_reader()
+    reader = get_easyocr_reader(langs)
     img_np = np.array(image) if not isinstance(image, np.ndarray) else image
     result = reader.readtext(img_np)
     lines = [text.strip() for bbox, text, prob in result if prob >= min_conf and text.strip()]
@@ -311,15 +309,10 @@ def clean_text(text: str) -> str:
     Cleans extracted text by removing non-ASCII characters,
     excessive newlines, and non-textual lines.
     """
-    # Remove non-ASCII characters
     text = re.sub(r'[^\x00-\x7F]+', ' ', text)
-    # Remove carriage returns
     text = re.sub(r'[\r]+', '', text)
-    # Remove multiple spaces
     text = re.sub(r'[ ]{2,}', ' ', text)
-    # Remove excessive newlines
     text = re.sub(r'[\n]{3,}', '\n\n', text)
-    # Filter out lines that are not primarily alphanumeric
     lines = text.splitlines()
     filtered = []
     for line in lines:
@@ -340,14 +333,11 @@ def draw_text_on_image(image, results):
             top_left = (int(top_left[0]), int(top_left[1]))
             bottom_right = (int(bottom_right[0]), int(bottom_right[1]))
             
-            # Create a rectangle for bbox display
             cv2.rectangle(img=img_np, pt1=top_left, pt2=bottom_right, color=(255, 0, 0), thickness=2)
-            
-            # Put recognized text
             cv2.putText(img=img_np, text=text, org=(top_left[0], top_left[1] - 10), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.5, color=(255, 0, 0), thickness=2)
     return Image.fromarray(img_np)
 
-def extract_text(image):
+def extract_text(image, langs):
     """
     Extracts text, first attempting with EasyOCR, then falling back to
     Tesseract if EasyOCR fails or produces poor results.
@@ -355,8 +345,7 @@ def extract_text(image):
     """
     easyocr_results = None
     try:
-        # Try EasyOCR first, with a confidence filter
-        text, easyocr_results = recognize_text_easyocr(image, min_conf=0.2)
+        text, easyocr_results = recognize_text_easyocr(image, langs)
         filtered = clean_text(text)
         if len(filtered) > 8 and any(c.isalpha() for c in filtered):
             return filtered, easyocr_results
@@ -381,20 +370,17 @@ def preprocess_image(img, processed_placeholder, status_placeholder):
     """
     status_placeholder.markdown('**Normalizing Image...**')
     time.sleep(0.1)
-    # Convert to grayscale
     gray = ImageOps.grayscale(img)
     processed_placeholder.image(gray, caption="Grayscale", use_container_width=True)
     
     status_placeholder.markdown('**Enhancing Contrast...**')
     time.sleep(0.1)
-    # Enhance contrast
     enhancer = ImageEnhance.Contrast(gray)
     enhanced = enhancer.enhance(2.0)
     processed_placeholder.image(enhanced, caption="Contrast Enhanced", use_container_width=True)
     
     status_placeholder.markdown('**Binarizing (Otsu)...**')
     time.sleep(0.1)
-    # Binarize the image using Otsu's thresholding for better results
     arr = np.array(enhanced)
     _, binarized = cv2.threshold(arr, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     bin_img = Image.fromarray(binarized)
@@ -402,7 +388,6 @@ def preprocess_image(img, processed_placeholder, status_placeholder):
     
     status_placeholder.markdown('**Denoising (Morphological)...**')
     time.sleep(0.1)
-    # Apply morphological open to remove noise
     kernel = np.ones((1, 1), np.uint8)
     denoised_np = cv2.morphologyEx(binarized, cv2.MORPH_OPEN, kernel)
     denoised = Image.fromarray(denoised_np)
@@ -416,56 +401,47 @@ def preprocess_image(img, processed_placeholder, status_placeholder):
 def classify_document(text, img, processed_img, ocr_results):
     """
     Classifies the image based on extracted text and image properties.
-    The logic is more comprehensive now.
     """
     words = text.split()
     real_words = [w for w in words if len(w) > 2 and re.match(r"[a-zA-Z]", w)]
     
-    # Heuristics based on text properties
     word_count = len(words)
     line_count = len(text.splitlines())
     char_count = len(text.replace(" ", "").replace("\n", ""))
     
-    # Heuristics based on image properties
     img_width, img_height = img.size
     aspect_ratio = max(img_width, img_height) / min(img_width, img_height) if min(img_width, img_height) > 0 else 1
     
     arr_proc = np.array(processed_img.convert("L"))
     std = arr_proc.std()
     
-    # Scoring system for classification
     document_score = 0
     handwritten_score = 0
     
     if word_count > 50 and line_count > 10:
         document_score += 40
-    if char_count / (img_width * img_height) > 0.005:  # High character density
+    if char_count / (img_width * img_height) > 0.005:
         document_score += 20
-    if 1.4 < aspect_ratio < 1.6: # A4 or US letter aspect ratio
+    if 1.4 < aspect_ratio < 1.6:
         document_score += 20
-    if std > 55 and std < 95: # Texture characteristic of handwriting
+    if std > 55 and std < 95:
         handwritten_score += 40
     
-    # Check for specific keywords
     keywords = {'invoice', 'receipt', 'report', 'statement', 'bill', 'form'}
     for word in real_words:
         if word.lower() in keywords:
             document_score += 15
             break
             
-    # Classify as "Picture" if very little text is found
     if word_count < 10 or len(real_words) < 5:
         return "Picture", 99
         
-    # Final classification based on scores
     if document_score > handwritten_score:
         return "Document", min(100, 70 + document_score // 2)
     elif handwritten_score > document_score:
         return "Handwritten Note", min(100, 70 + handwritten_score // 2)
     else:
-        # Default to Document if scores are similar
         return "Document", min(100, 70 + document_score // 2)
-
 
 def word_frequency(text):
     """Calculates the frequency of each word in the text."""
@@ -493,6 +469,23 @@ if 'last_uploaded_filename' not in st.session_state:
     st.session_state.last_uploaded_filename = None
 
 # ----------------------------------------
+# Sidebar for Settings
+# ----------------------------------------
+st.sidebar.header("Settings")
+st.sidebar.markdown("Configure your OCR extraction preferences.")
+available_langs = ['en', 'ar', 'ru', 'ch_sim', 'ja']
+selected_langs = st.sidebar.multiselect(
+    'Select language(s) for OCR',
+    options=available_langs,
+    default=['en'],
+    help="Select the languages present in the image. Multiple languages are supported."
+)
+
+if not selected_langs:
+    st.sidebar.warning("Please select at least one language.")
+    st.stop()
+
+# ----------------------------------------
 # Main UI
 # ----------------------------------------
 st.markdown("""
@@ -511,17 +504,15 @@ uploaded_file = st.file_uploader("", type=["png", "jpg", "jpeg"], key="file_uplo
 st.markdown("""</div></div></div>""", unsafe_allow_html=True)
 
 if uploaded_file:
-    # Check if a new file has been uploaded to avoid reprocessing
     if st.session_state.last_uploaded_filename != uploaded_file.name:
         st.session_state.last_uploaded_filename = uploaded_file.name
         st.session_state.uploaded_image = None
         st.session_state.processing = False
         try:
             image_data = uploaded_file.getvalue()
-            # This is where the fix is applied.
             _ = Image.open(BytesIO(image_data))
             st.session_state.uploaded_image = image_data
-            st.rerun() # Rerun to display the previews
+            st.rerun()
         except Exception:
             st.error("The file you uploaded could not be identified as a valid image. Please try a different file.")
             st.session_state.uploaded_image = None
@@ -530,7 +521,6 @@ if st.session_state.uploaded_image and not st.session_state.processing:
     st.session_state.processing = True
     image = Image.open(BytesIO(st.session_state.uploaded_image)).convert("RGB")
     
-    # Create the columns and placeholders for the images
     col1, col2, col3 = st.columns(3)
     
     with col1:
@@ -555,21 +545,29 @@ if st.session_state.uploaded_image and not st.session_state.processing:
     metric_grid_placeholder = st.empty()
     text_output_placeholder = st.empty()
     
+    start_time = time.time()
+    
     status_text.markdown('**Preprocessing Image...**')
-    time.sleep(0.1) # Add a small delay to ensure the UI updates
+    preprocess_start = time.time()
     processed_image = preprocess_image(image, processed_image_placeholder, status_text)
+    preprocess_time = time.time() - preprocess_start
     
     status_text.markdown('**Extracting Text...**')
-    time.sleep(0.2)
-    extracted_text, ocr_results = extract_text(processed_image)
+    extract_start = time.time()
+    extracted_text, ocr_results = extract_text(processed_image, selected_langs)
+    extract_time = time.time() - extract_start
     
     status_text.markdown('**Drawing Text on Image...**')
+    overlay_start = time.time()
     overlayed_image = None
     if ocr_results:
         overlayed_image = draw_text_on_image(image, ocr_results)
         overlayed_image_placeholder.image(overlayed_image, caption="Text Overlay", use_container_width=True)
     else:
         overlayed_image_placeholder.image(image, caption="No OCR Results", use_container_width=True)
+    overlay_time = time.time() - overlay_start
+    
+    total_time = time.time() - start_time
     
     label, confidence = classify_document(extracted_text, image, processed_image, ocr_results)
     word_count = len(extracted_text.split())
@@ -598,9 +596,9 @@ if st.session_state.uploaded_image and not st.session_state.processing:
             <p style="color:#444; font-size:0.83rem;">(Words)</p>
         </div>
         <div class="metric-card">
-            <h4>Char/Word</h4>
-            <div class="metric-value">{avg_word_length:.2f}</div>
-            <p style="color:#444; font-size:0.83rem;">(Avg len)</p>
+            <h4>Processing</h4>
+            <div class="metric-value">{total_time:.2f}s</div>
+            <p style="color:#444; font-size:0.83rem;">(Total Time)</p>
         </div>
         <div class="metric-card">
             <h4>Top Words</h4>
@@ -624,8 +622,6 @@ if st.session_state.uploaded_image and not st.session_state.processing:
         function copyToClipboard() {{
             const textToCopy = document.getElementById('ocrText').innerText;
             navigator.clipboard.writeText(textToCopy).then(() => {{
-                // This will be handled by the Streamlit Python side now.
-                // It works better with Streamlit's toast/status messages.
                 window.parent.postMessage({{
                     streamlit: {{
                         type: 'streamlit:setComponentValue',
@@ -644,7 +640,6 @@ if st.session_state.uploaded_image and not st.session_state.processing:
     status_text.markdown('**Done!**')
     st.session_state.processing = False
     
-    # This toast is triggered when the text is successfully copied
     if st.session_state.get('copied_success'):
         st.toast("Text copied to clipboard!")
         st.session_state.copied_success = False
@@ -654,8 +649,8 @@ st.markdown("""
     <p style="color:#444; font-size:0.8rem;">OCR-TECH - ADELEKE, OLADOKUN, OLALEYE</p>
     <a href="https://github.com/Praiz22/ocr-tech" target="_blank" class="github-link">
         <span style="display:inline-flex; align-items:center; gap:5px; color:#444; font-size:0.8rem; font-weight: 500;">
-            Github Repo- Praixtech
-            <svg class="github-icon-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--!Font Awesome Free 6.5.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2024 Fonticons, Inc.--><path d="M165.9 397.4c0 2-2.3 4-4.9 4-2.7 0-4.9-2-4.9-4 0-2 2.3-4 4.9-4 2.7 0 4.9 2 4.9 4zm-14-100.2c.4 1.3.1 2.5-.6 3.5-.9 1.4-1.9 2.7-3.2 3.8-1.5 1.3-3.2 2.6-5 3.6-2.6 1.3-5.5 2.2-8.5 2.5-3.3 .4-6.6-.7-9.3-2.6-2.5-1.7-4.4-4.1-5.6-7-.9-2.2-1.3-4.5-1.4-6.8-2.1-4.9-1.9-9.8.5-14.7 1.5-2.8 3.5-5.5 5.9-7.8 1.9-1.8 4-3.5 6.2-5.1 2.3-1.6 4.7-3 7.2-4.1 2.3-1.2 4.9-2.2 7.6-2.7 2.3-.5 4.6-1.1 7-.9 2.5 .3 5 .8 7.3 1.9 2.1 .9 4.1 2.2 5.9 3.8 2.3 2.1 4.2 4.5 5.8 7.2 1.3 2 2.2 4.2 2.7 6.6 .5 2.4 .7 4.9 .5 7.4-.2 2.6-.8 5.1-1.7 7.5zm-51.5-7.4c.5 1.2.3 2.6-.5 3.8-.9 1.4-2.1 2.7-3.5 3.9-1.6 1.4-3.5 2.6-5.5 3.7-2.6 1.4-5.5 2.2-8.6 2.5-3.4 .4-6.8-.7-9.6-2.7-2.7-1.7-4.7-4.2-6-7.2-.9-2.3-1.3-4.8-1.4-7.2-2.3-5.2-2.2-10.4-.1-15.5 1.6-3 3.7-5.8 6.3-8.2 2.1-1.9 4.3-3.7 6.6-5.4 2.4-1.7 4.9-3.2 7.6-4.3 2.4-1.2 5.1-2.2 7.9-2.7 2.4-.5 4.9-1.1 7.4-.9 2.6 .3 5.2 .8 7.5 2 2.2 1 4.2 2.4 6 4 2.3 2.1 4.2 4.6 5.9 7.4 1.4 2.2 2.2 4.6 2.7 7.1 .5 2.5 .7 5 .5 7.6-.2 2.6-.8 5.1-1.8 7.5zm-5.1-47.5c.3 1.2 .1 2.4-.6 3.5-.9 1.4-2.1 2.7-3.4 3.9-1.5 1.4-3.3 2.6-5.2 3.6-2.4 1.2-5 1.9-7.8 2.1-3.1 .3-6.2-.7-8.8-2.4-2.4-1.6-4.2-3.9-5.4-6.6-.8-2-1.2-4.1-1.3-6.3-2-4.7-1.9-9.5 .4-14.2 1.4-2.7 3.3-5.2 5.6-7.4 1.8-1.7 3.8-3.3 5.9-4.9 2.2-1.6 4.6-3 7.1-4.1 2.2-1.1 4.6-2 7.1-2.5 2.1-.4 4.3-.9 6.5-.7 2.3 .2 4.6 .6 6.7 1.6 2 .9 3.9 2.2 5.6 3.7 2.2 2.1 4 4.5 5.5 7.1 1.2 2 2 4.1 2.5 6.3 .4 2.2 .6 4.5 .4 6.8-.2 2.2-.6 4.5-1.5 6.6zm-11.4 102c.4 2.1-.5 4.3-2.6 5.5-2.2 1.2-4.6 1.9-7.1 2.1-3.2 .3-6.4-.8-9.1-2.9-2.7-2.1-4.7-4.8-6.1-8-1.2-2.7-1.8-5.6-1.9-8.5-.8-5.3-.2-10.7 2.2-15.8 1.8-3.8 4.2-7.3 7-10.4 2.5-2.8 5.3-5.3 8.3-7.5 2.7-2 5.6-3.7 8.6-5.1 3-1.4 6.2-2.4 9.4-2.8 3.3-.4 6.7-.8 10-1.1 3.5-.3 7.1-.6 10.6-.2 3.7 .4 7.3 1.2 10.8 2.6 3.3 1.4 6.5 3.1 9.6 5.2 3.2 2.2 6.1 4.7 8.8 7.6 2.5 2.6 4.6 5.5 6.3 8.7 1.5 3.2 2.5 6.6 3.2 10.1 .7 3.4 .9 6.9 .6 10.4-.3 3.3-.8 6.7-1.7 9.9zm135-26.1c.5 1.3 .3 2.6-.5 3.8-.9 1.4-2.1 2.7-3.5 3.9-1.6 1.4-3.5 2.6-5.5 3.7-2.6 1.4-5.5 2.2-8.6 2.5-3.4 .4-6.8-.7-9.6-2.7-2.7-1.7-4.7-4.2-6-7.2-.9-2.3-1.3-4.8-1.4-7.2-2.3-5.2-2.2-10.4-.1-15.5 1.6-3 3.7-5.8 6.3-8.2 2.1-1.9 4.3-3.7 6.6-5.4 2.4-1.7 4.9-3.2 7.6-4.3 2.4-1.2 5.1-2.2 7.9-2.7 2.4-.5 4.9-1.1 7.4-.9 2.6 .3 5.2 .8 7.5 2 2.2 1 4.2 2.4 6 4 2.3 2.1 4.2 4.6 5.9 7.4 1.4 2.2 2.2 4.6 2.7 7.1 .5 2.5 .7 5 .5 7.6-.2 2.6-.8 5.1-1.8 7.5zm-5.1-47.5c.3 1.2 .1 2.4-.6 3.5-.9 1.4-2.1 2.7-3.4 3.9-1.5 1.4-3.3 2.6-5.2 3.6-2.4 1.2-5 1.9-7.8 2.1-3.1 .3-6.2-.7-8.8-2.4-2.4-1.6-4.2-3.9-5.4-6.6-.8-2-1.2-4.1-1.3-6.3-2-4.7-1.9-9.5 .4-14.2 1.4-2.7 3.3-5.2 5.6-7.4 1.8-1.7 3.8-3.3 5.9-4.9 2.2-1.6 4.6-3 7.1-4.1 2.2-1.1 4.6-2 7.1-2.5 2.1-.4 4.3-.9 6.5-.7 2.3 .2 4.6 .6 6.7 1.6 2 .9 3.9 2.2 5.6 3.7 2.2 2.1 4 4.5 5.5 7.1 1.2 2 2 4.1 2.5 6.3 .4 2.2 .6 4.5 .4 6.8-.2 2.2-.6 4.5-1.5 6.6zm114.2 60.1c.3 1.2 .1 2.4-.6 3.5-.9 1.4-2.1 2.7-3.4 3.9-1.5 1.4-3.3 2.6-5.2 3.6-2.4 1.2-5 1.9-7.8 2.1-3.1 .3-6.2-.7-8.8-2.4-2.4-1.6-4.2-3.9-5.4-6.6-.8-2-1.2-4.1-1.3-6.3-2-4.7-1.9-9.5 .4-14.2 1.4-2.7 3.3-5.2 5.6-7.4 1.8-1.7 3.8-3.3 5.9-4.9 2.2-1.6 4.6-3 7.1-4.1 2.2-1.1 4.6-2 7.1-2.5 2.1-.4 4.3-.9 6.5-.7 2.3 .2 4.6 .6 6.7 1.6 2 .9 3.9 2.2 5.6 3.7 2.2 2.1 4 4.5 5.5 7.1 1.2 2 2 4.1 2.5 6.3 .4 2.2 .6 4.5 .4 6.8-.2 2.2-.6 4.5-1.5 6.6zm-29.3 103.1c-1.4 1.2-3.2 2.2-5.1 3.1-2.2 1-4.6 1.5-7.1 1.5-2.7 0-5.3-.4-7.8-1.2-2.5-.8-4.9-2-7.1-3.6-2.2-1.5-4.2-3.3-5.9-5.3-1.6-2.1-2.8-4.5-3.7-7.1-.8-2.5-1.2-5.2-1.2-7.9 0-3.1 .5-6.2 1.5-9.1 1-2.9 2.3-5.7 3.9-8.2 1.7-2.6 3.6-5 5.7-7.2 2-2.1 4.2-3.9 6.6-5.4 2.4-1.5 4.9-2.7 7.6-3.6 2.5-.8 5.1-1.2 7.8-1.2 2.6 0 5.2 .4 7.7 1.2 2.5 .8 4.9 2 7.2 3.6 2.3 1.5 4.4 3.4 6.2 5.5 1.7 2.1 3 4.5 3.9 7.1 .8 2.6 1.2 5.2 1.2 8-.1 3.2-.5 6.3-1.6 9.3-1 2.9-2.3 5.7-4 8.2zm-28-144.1c-1.4 1.2-3.2 2.2-5.1 3.1-2.2 1-4.6 1.5-7.1 1.5-2.7 0-5.3-.4-7.8-1.2-2.5-.8-4.9-2-7.1-3.6-2.2-1.5-4.2-3.3-5.9-5.3-1.6-2.1-2.8-4.5-3.7-7.1-.8-2.5-1.2-5.2-1.2-7.9 0-3.1 .5-6.2 1.5-9.1 1-2.9 2.3-5.7 3.9-8.2 1.7-2.6 3.6-5 5.7-7.2 2-2.1 4.2-3.9 6.6-5.4 2.4-1.5 4.9-2.7 7.6-3.6 2.5-.8 5.1-1.2 7.8-1.2 2.6 0 5.2 .4 7.7 1.2 2.5 .8 4.9 2 7.2 3.6 2.3 1.5 4.4 3.4 6.2 5.5 1.7 2.1 3 4.5 3.9 7.1 .8 2.6 1.2 5.2 1.2 8-.1 3.2-.5 6.3-1.6 9.3-1 2.9-2.3 5.7-4 8.2zm23.4 216c-2.3 2.1-4.2 4.6-5.9 7.4-1.4 2.2-2.2 4.6-2.7 7.1-.5 2.5-.7 5-.5 7.6 .2 2.6 .8 5.1 1.8 7.5 1.3 3.1 3 5.7 5.1 8 2.1 2.2 4.6 4.1 7.4 5.9 2.8 1.8 5.7 3 8.8 3.9 3.1 .9 6.3 1.3 9.4 1.3 3.3 0 6.6-.4 9.8-1.3 3.2-.8 6.2-2.2 9.1-4 2.8-1.7 5.5-3.7 7.8-5.9 2.4-2.3 4.3-4.9 5.8-7.8 1.4-2.9 2.3-6.1 2.7-9.3 .4-3.2 .5-6.5 .1-9.7-.5-3.1-1.3-6.1-2.5-9-.9-2.1-2.2-4.1-3.7-6-1.4-1.8-3-3.4-4.8-4.9-1.9-1.5-3.9-2.8-6.1-3.9-2.2-1.1-4.6-2-7.1-2.5-2.5-.5-5.1-.7-7.6-.6-2.5 .1-5 .6-7.3 1.6-2.2 1-4.3 2.3-6.3 3.8zm11.3-88.7c.3 1.2 .1 2.4-.6 3.5-.9 1.4-2.1 2.7-3.4 3.9-1.5 1.4-3.3 2.6-5.2 3.6-2.4 1.2-5 1.9-7.8 2.1-3.1 .3-6.2-.7-8.8-2.4-2.4-1.6-4.2-3.9-5.4-6.6-.8-2-1.2-4.1-1.3-6.3-2-4.7-1.9-9.5 .4-14.2 1.4-2.7 3.3-5.2 5.6-7.4 1.8-1.7 3.8-3.3 5.9-4.9 2.2-1.6 4.6-3 7.1-4.1 2.2-1.1 4.6-2 7.1-2.5 2.1-.4 4.3-.9 6.5-.7 2.3 .2 4.6 .6 6.7 1.6 2 .9 3.9 2.2 5.6 3.7 2.2 2.1 4 4.5 5.5 7.1 1.2 2 2 4.1 2.5 6.3 .4 2.2 .6 4.5 .4 6.8-.2 2.2-.6 4.5-1.5 6.6zm-113.8 62.7c.4 1.3.1 2.5-.6 3.5-.9 1.4-1.9 2.7-3.2 3.8-1.5 1.3-3.2 2.6-5 3.6-2.6 1.3-5.5 2.2-8.5 2.5-3.3 .4-6.6-.7-9.3-2.6-2.5-1.7-4.4-4.1-5.6-7-.9-2.2-1.3-4.5-1.4-6.8-2.1-4.9-1.9-9.8.5-14.7 1.5-2.8 3.5-5.5 5.9-7.8 1.9-1.8 4-3.5 6.2-5.1 2.3-1.6 4.7-3 7.2-4.1 2.3-1.2 4.9-2.2 7.6-2.7 2.3-.5 4.6-1.1 7-.9 2.5 .3 5 .8 7.3 1.9 2.1 .9 4.1 2.2 5.9 3.8 2.3 2.1 4.2 4.5 5.8 7.2 1.3 2 2.2 4.2 2.7 6.6 .5 2.4 .7 4.9 .5 7.4-.2 2.6-.8 5.1-1.7 7.5zM248 8C111 8 0 119 0 256s111 248 248 248 248-111 248-248S385 8 248 8zm44.2 222.1c1.3 1.3 2.5 2.7 3.7 4.2 1.3 1.5 2.3 3.1 3.3 4.7 1.2 2 2 4.1 2.6 6.3 .7 2.2 1 4.5 1 6.8 0 3-.5 6-1.4 8.9-.9 2.8-2.2 5.5-3.8 8-1.6 2.6-3.4 5-5.6 7.2-2.2 2.1-4.6 3.9-7.1 5.4-2.5 1.5-5.1 2.7-7.8 3.6-2.7 .9-5.4 1.2-8.1 1.2-2.9 0-5.8-.4-8.7-1.4-3-.9-5.9-2.2-8.6-3.8-2.7-1.6-5.3-3.6-7.8-5.8-2.5-2.3-4.8-5-6.6-7.9-1.7-3-3-6.2-3.8-9.6-.8-3.4-1.2-6.9-1.1-10.4 .1-3.3 .7-6.6 1.7-9.9 1-3.2 2.4-6.2 4.1-9 1.5-2.5 3.4-4.8 5.6-6.9 2.1-2.1 4.5-3.9 7-5.4 2.5-1.5 5.1-2.6 7.8-3.5 2.7-.9 5.5-1.2 8.2-1.2 2.9 0 5.8 .4 8.7 1.4 3 .9 5.8 2.2 8.5 3.8 2.7 1.6 5.3 3.6 7.8 5.9 2.5 2.3 4.8 5.1 6.6 8.1 1.7 3 3 6.3 3.8 9.7 .8 3.4 1.2 6.9 1.1 10.4-.1 3.3-.7 6.6-1.8 9.9z"/></svg>
+            Github Repo- Praiztech
+            <svg class="github-icon-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--!Font Awesome Free 6.5.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2024 Fonticons, Inc.--><path d="M165.9 397.4c0 2-2.3 4-4.9 4-2.7 0-4.9-2-4.9-4 0-2 2.3-4 4.9-4 2.7 0 4.9 2 4.9 4zm-14-100.2c.4 1.3.1 2.5-.6 3.5-.9 1.4-1.9 2.7-3.2 3.8-1.5 1.3-3.2 2.6-5 3.6-2.6 1.3-5.5 2.2-8.5 2.5-3.3 .4-6.6-.7-9.3-2.6-2.5-1.7-4.4-4.1-5.6-7-.9-2.2-1.3-4.5-1.4-6.8-2.1-4.9-1.9-9.8.5-14.7 1.5-2.8 3.5-5.5 5.9-7.8 1.9-1.8 4-3.5 6.2-5.1 2.3-1.6 4.7-3 7.2-4.1 2.3-1.2 4.9-2.2 7.6-2.7 2.3-.5 4.6-1.1 7-.9 2.5 .3 5 .8 7.3 1.9 2.1 .9 4.1 2.2 5.9 3.8 2.3 2.1 4.2 4.5 5.8 7.2 1.3 2 2.2 4.2 2.7 6.6 .5 2.4 .7 4.9 .5 7.4-.2 2.6-.8 5.1-1.7 7.5zm-51.5-7.4c.5 1.2.3 2.6-.5 3.8-.9 1.4-2.1 2.7-3.5 3.9-1.6 1.4-3.5 2.6-5.5 3.7-2.6 1.4-5.5 2.2-8.6 2.5-3.4 .4-6.8-.7-9.6-2.7-2.7-1.7-4.7-4.2-6-7.2-.9-2.3-1.3-4.8-1.4-7.2-2.3-5.2-2.2-10.4-.1-15.5 1.6-3 3.7-5.8 6.3-8.2 2.1-1.9 4.3-3.7 6.6-5.4 2.4-1.7 4.9-3.2 7.6-4.3 2.4-1.2 5.1-2.2 7.9-2.7 2.4-.5 4.9-1.1 7.4-.9 2.6 .3 5.2 .8 7.5 2 2.2 1 4.2 2.4 6 4 2.3 2.1 4.2 4.6 5.9 7.4 1.4 2.2 2.2 4.6 2.7 7.1 .5 2.5 .7 5 .5 7.6-.2 2.6-.8 5.1-1.8 7.5zm-5.1-47.5c.3 1.2 .1 2.4-.6 3.5-.9 1.4-2.1 2.7-3.4 3.9-1.5 1.4-3.3 2.6-5.2 3.6-2.4 1.2-5 1.9-7.8 2.1-3.1 .3-6.2-.7-8.8-2.4-2.4-1.6-4.2-3.9-5.4-6.6-.8-2-1.2-4.1-1.3-6.3-2-4.7-1.9-9.5 .4-14.2 1.4-2.7 3.3-5.2 5.6-7.4 1.8-1.7 3.8-3.3 5.9-4.9 2.2-1.6 4.6-3 7.1-4.1 2.2-1.1 4.6-2 7.1-2.5 2.1-.4 4.3-.9 6.5-.7 2.3 .2 4.6 .6 6.7 1.6 2 .9 3.9 2.2 5.6 3.7 2.2 2.1 4 4.5 5.5 7.1 1.2 2 2 4.1 2.5 6.3 .4 2.2 .6 4.5 .4 6.8-.2 2.2-.6 4.5-1.5 6.6zm-11.4 102c.4 2.1-.5 4.3-2.6 5.5-2.2 1.2-4.6 1.9-7.1 2.1-3.2 .3-6.4-.8-9.1-2.9-2.7-2.1-4.7-4.8-6.1-8-1.2-2.7-1.8-5.6-1.9-8.5-.8-5.3-.2-10.7 2.2-15.8 1.8-3.8 4.2-7.3 7-10.4 2.5-2.8 5.3-5.3 8.3-7.5 2.7-2 5.6-3.7 8.6-5.1 3-1.4 6.2-2.4 9.4-2.8 3.3-.4 6.7-.8 10-1.1 3.5-.3 7.1-.6 10.6-.2 3.7 .4 7.3 1.2 10.8 2.6 3.3 1.4 6.5 3.1 9.6 5.2 3.2 2.2 6.1 4.7 8.8 7.6 2.5 2.6 4.6 5.5 6.3 8.7 1.5 3.2 2.5 6.6 3.2 10.1 .7 3.4 .9 6.9 .6 10.4-.3 3.3-.8 6.7-1.7 9.9zm135-26.1c.5 1.2 .3 2.6-.5 3.8-.9 1.4-2.1 2.7-3.5 3.9-1.6 1.4-3.5 2.6-5.5 3.7-2.6 1.4-5.5 2.2-8.6 2.5-3.4 .4-6.8-.7-9.6-2.7-2.7-1.7-4.7-4.2-6-7.2-.9-2.3-1.3-4.8-1.4-7.2-2.3-5.2-2.2-10.4-.1-15.5 1.6-3 3.7-5.8 6.3-8.2 2.1-1.9 4.3-3.7 6.6-5.4 2.4-1.7 4.9-3.2 7.6-4.3 2.4-1.2 5.1-2.2 7.9-2.7 2.4-.5 4.9-1.1 7.4-.9 2.6 .3 5.2 .8 7.5 2 2.2 1 4.2 2.4 6 4 2.3 2.1 4.2 4.6 5.9 7.4 1.4 2.2 2.2 4.6 2.7 7.1 .5 2.5 .7 5 .5 7.6-.2 2.6-.8 5.1-1.8 7.5zm-5.1-47.5c.3 1.2 .1 2.4-.6 3.5-.9 1.4-2.1 2.7-3.4 3.9-1.5 1.4-3.3 2.6-5.2 3.6-2.4 1.2-5 1.9-7.8 2.1-3.1 .3-6.2-.7-8.8-2.4-2.4-1.6-4.2-3.9-5.4-6.6-.8-2-1.2-4.1-1.3-6.3-2-4.7-1.9-9.5 .4-14.2 1.4-2.7 3.3-5.2 5.6-7.4 1.8-1.7 3.8-3.3 5.9-4.9 2.2-1.6 4.6-3 7.1-4.1 2.2-1.1 4.6-2 7.1-2.5 2.1-.4 4.3-.9 6.5-.7 2.3 .2 4.6 .6 6.7 1.6 2 .9 3.9 2.2 5.6 3.7 2.2 2.1 4 4.5 5.5 7.1 1.2 2 2 4.1 2.5 6.3 .4 2.2 .6 4.5 .4 6.8-.2 2.2-.6 4.5-1.5 6.6zm114.2 60.1c.3 1.2 .1 2.4-.6 3.5-.9 1.4-2.1 2.7-3.4 3.9-1.5 1.4-3.3 2.6-5.2 3.6-2.4 1.2-5 1.9-7.8 2.1-3.1 .3-6.2-.7-8.8-2.4-2.4-1.6-4.2-3.9-5.4-6.6-.8-2-1.2-4.1-1.3-6.3-2-4.7-1.9-9.5 .4-14.2 1.4-2.7 3.3-5.2 5.6-7.4 1.8-1.7 3.8-3.3 5.9-4.9 2.2-1.6 4.6-3 7.1-4.1 2.2-1.1 4.6-2 7.1-2.5 2.1-.4 4.3-.9 6.5-.7 2.3 .2 4.6 .6 6.7 1.6 2 .9 3.9 2.2 5.6 3.7 2.2 2.1 4 4.5 5.5 7.1 1.2 2 2 4.1 2.5 6.3 .4 2.2 .6 4.5 .4 6.8-.2 2.2-.6 4.5-1.5 6.6zm-29.3 103.1c-1.4 1.2-3.2 2.2-5.1 3.1-2.2 1-4.6 1.5-7.1 1.5-2.7 0-5.3-.4-7.8-1.2-2.5-.8-4.9-2-7.1-3.6-2.2-1.5-4.2-3.3-5.9-5.3-1.6-2.1-2.8-4.5-3.7-7.1-.8-2.5-1.2-5.2-1.2-7.9 0-3.1 .5-6.2 1.5-9.1 1-2.9 2.3-5.7 3.9-8.2 1.7-2.6 3.6-5 5.7-7.2 2-2.1 4.2-3.9 6.6-5.4 2.4-1.5 4.9-2.7 7.6-3.6 2.5-.8 5.1-1.2 7.8-1.2 2.6 0 5.2 .4 7.7 1.2 2.5 .8 4.9 2 7.2 3.6 2.3 1.5 4.4 3.4 6.2 5.5 1.7 2.1 3 4.5 3.9 7.1 .8 2.6 1.2 5.2 1.2 8-.1 3.2-.5 6.3-1.6 9.3-1 2.9-2.3 5.7-4 8.2zm-28-144.1c-1.4 1.2-3.2 2.2-5.1 3.1-2.2 1-4.6 1.5-7.1 1.5-2.7 0-5.3-.4-7.8-1.2-2.5-.8-4.9-2-7.1-3.6-2.2-1.5-4.2-3.3-5.9-5.3-1.6-2.1-2.8-4.5-3.7-7.1-.8-2.5-1.2-5.2-1.2-7.9 0-3.1 .5-6.2 1.5-9.1 1-2.9 2.3-5.7 3.9-8.2 1.7-2.6 3.6-5 5.7-7.2 2-2.1 4.2-3.9 6.6-5.4 2.4-1.5 4.9-2.7 7.6-3.6 2.5-.8 5.1-1.2 7.8-1.2 2.6 0 5.2 .4 7.7 1.2 2.5 .8 4.9 2 7.2 3.6 2.3 1.5 4.4 3.4 6.2 5.5 1.7 2.1 3 4.5 3.9 7.1 .8 2.6 1.2 5.2 1.2 8-.1 3.2-.5 6.3-1.6 9.3-1 2.9-2.3 5.7-4 8.2zm23.4 216c-2.3 2.1-4.2 4.6-5.9 7.4-1.4 2.2-2.2 4.6-2.7 7.1-.5 2.5-.7 5-.5 7.6 .2 2.6 .8 5.1 1.8 7.5 1.3 3.1 3 5.7 5.1 8 2.1 2.2 4.6 4.1 7.4 5.9 2.8 1.8 5.7 3 8.8 3.9 3.1 .9 6.3 1.3 9.4 1.3 3.3 0 6.6-.4 9.8-1.3 3.2-.8 6.2-2.2 9.1-4 2.8-1.7 5.5-3.7 7.8-5.9 2.4-2.3 4.3-4.9 5.8-7.8 1.4-2.9 2.3-6.1 2.7-9.3 .4-3.2 .5-6.5 .1-9.7-.5-3.1-1.3-6.1-2.5-9-.9-2.1-2.2-4.1-3.7-6-1.4-1.8-3-3.4-4.8-4.9-1.9-1.5-3.9-2.8-6.1-3.9-2.2-1.1-4.6-2-7.1-2.5-2.5-.5-5.1-.7-7.6-.6-2.5 .1-5 .6-7.3 1.6-2.2 1-4.3 2.3-6.3 3.8zm11.3-88.7c.3 1.2 .1 2.4-.6 3.5-.9 1.4-2.1 2.7-3.4 3.9-1.5 1.4-3.3 2.6-5.2 3.6-2.4 1.2-5 1.9-7.8 2.1-3.1 .3-6.2-.7-8.8-2.4-2.4-1.6-4.2-3.9-5.4-6.6-.8-2-1.2-4.1-1.3-6.3-2-4.7-1.9-9.5 .4-14.2 1.4-2.7 3.3-5.2 5.6-7.4 1.8-1.7 3.8-3.3 5.9-4.9 2.2-1.6 4.6-3 7.1-4.1 2.2-1.1 4.6-2 7.1-2.5 2.1-.4 4.3-.9 6.5-.7 2.3 .2 4.6 .6 6.7 1.6 2 .9 3.9 2.2 5.6 3.7 2.2 2.1 4 4.5 5.5 7.1 1.2 2 2 4.1 2.5 6.3 .4 2.2 .6 4.5 .4 6.8-.2 2.2-.6 4.5-1.5 6.6zm-113.8 62.7c.4 1.3.1 2.5-.6 3.5-.9 1.4-1.9 2.7-3.2 3.8-1.5 1.3-3.2 2.6-5 3.6-2.6 1.3-5.5 2.2-8.5 2.5-3.3 .4-6.6-.7-9.3-2.6-2.5-1.7-4.4-4.1-5.6-7-.9-2.2-1.3-4.5-1.4-6.8-2.1-4.9-1.9-9.8.5-14.7 1.5-2.8 3.5-5.5 5.9-7.8 1.9-1.8 4-3.5 6.2-5.1 2.3-1.6 4.7-3 7.2-4.1 2.3-1.2 4.9-2.2 7.6-2.7 2.3-.5 4.6-1.1 7-.9 2.5 .3 5 .8 7.3 1.9 2.1 .9 4.1 2.2 5.9 3.8 2.3 2.1 4.2 4.5 5.8 7.2 1.3 2 2.2 4.2 2.7 6.6 .5 2.4 .7 4.9 .5 7.4-.2 2.6-.8 5.1-1.7 7.5zM248 8C111 8 0 119 0 256s111 248 248 248 248-111 248-248S385 8 248 8zm44.2 222.1c1.3 1.3 2.5 2.7 3.7 4.2 1.3 1.5 2.3 3.1 3.3 4.7 1.2 2 2 4.1 2.6 6.3 .7 2.2 1 4.5 1 6.8 0 3-.5 6-1.4 8.9-.9 2.8-2.2 5.5-3.8 8-1.6 2.6-3.4 5-5.6 7.2-2.2 2.1-4.6 3.9-7.1 5.4-2.5 1.5-5.1 2.7-7.8 3.6-2.7 .9-5.4 1.2-8.1 1.2-2.9 0-5.8-.4-8.7-1.4-3-.9-5.9-2.2-8.6-3.8-2.7-1.6-5.3-3.6-7.8-5.8-2.5-2.3-4.8-5-6.6-7.9-1.7-3-3-6.2-3.8-9.6-.8-3.4-1.2-6.9-1.1-10.4 .1-3.3 .7-6.6 1.7-9.9 1-3.2 2.4-6.2 4.1-9 1.5-2.5 3.4-4.8 5.6-6.9 2.1-2.1 4.5-3.9 7-5.4 2.5-1.5 5.1-2.6 7.8-3.5 2.7-.9 5.5-1.2 8.2-1.2 2.9 0 5.8 .4 8.7 1.4 3 .9 5.8 2.2 8.5 3.8 2.7 1.6 5.3 3.6 7.8 5.9 2.5 2.3 4.8 5.1 6.6 8.1 1.7 3 3 6.3 3.8 9.7 .8 3.4 1.2 6.9 1.1 10.4-.1 3.3-.7 6.6-1.8 9.9z"/></svg>
     </a>
 </div>
 """, unsafe_allow_html=True)
